@@ -1,0 +1,10 @@
+<resources>
+    <string name="app_name">IPTV Player</string>
+    <string name="channels">Canales</string>
+    <string name="favorites">Favoritos</string>
+    <string name="settings">Configuración</string>
+    <string name="loading">Cargando...</string>
+    <string name="error_loading_channels">Error al cargar canales</string>
+    <string name="retry">Reintentar</string>
+    <string name="no_channels">No hay canales disponibles</string>
+</resources>
