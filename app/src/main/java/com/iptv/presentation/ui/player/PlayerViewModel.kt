@@ -28,6 +28,16 @@ class PlayerViewModel @Inject constructor(
     
     init {
         loadChannels()
+        // Configurar auto-skip solo para errores reales, no para navegación manual
+        vlcPlayerManager.setOnChannelErrorListener {
+            // Solo auto-skip si no es navegación manual desde menú
+            if (_uiState.value.isPlaying) {
+                println("IPTV: Canal no funciona - saltando al siguiente")
+                nextChannel()
+            } else {
+                println("IPTV: Error en canal pero no auto-skip (navegación manual)")
+            }
+        }
     }
     
     private fun loadChannels() {
