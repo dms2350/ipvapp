@@ -20,39 +20,15 @@ object NetworkModule {
     @Singleton
     fun provideOkHttpClient(): OkHttpClient {
         return OkHttpClient.Builder()
+            .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+            .retryOnConnectionFailure(true)
             .addInterceptor(
                 HttpLoggingInterceptor().apply {
-                    level = HttpLoggingInterceptor.Level.BODY
+                    level = HttpLoggingInterceptor.Level.BASIC
                 }
             )
-            .addInterceptor { chain ->
-                val request = chain.request().newBuilder()
-                    .addHeader("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
-                    .addHeader("Accept", "application/json")
-                    .addHeader("Content-Type", "application/json")
-                    .build()
-                
-                println("IPTV: Enviando request a: ${request.url}")
-                
-                try {
-                    val response = chain.proceed(request)
-                    println("IPTV: Response code: ${response.code}")
-                    println("IPTV: Response message: ${response.message}")
-                    
-                    if (response.isSuccessful) {
-                        val body = response.peekBody(Long.MAX_VALUE).string()
-                        println("IPTV: Response body preview: ${body.take(200)}...")
-                    }
-                    
-                    response
-                } catch (e: Exception) {
-                    println("IPTV: Error en request: ${e.message}")
-                    throw e
-                }
-            }
-            .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-            .readTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-            .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
             .build()
     }
 

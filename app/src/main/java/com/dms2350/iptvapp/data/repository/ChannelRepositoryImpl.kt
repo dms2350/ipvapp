@@ -46,7 +46,13 @@ class ChannelRepositoryImpl @Inject constructor(
             channelDao.deleteAllChannels()
             println("IPTV: BD limpiada")
             
-            val response = api.getChannels()
+            val startTime = System.currentTimeMillis()
+            val response = kotlinx.coroutines.withTimeout(15000) { // 15 segundos timeout
+                api.getChannels()
+            }
+            val endTime = System.currentTimeMillis()
+            
+            println("IPTV: ✅ API respondió en ${endTime - startTime}ms")
             println("IPTV: Response code: ${response.code()}")
             
             if (response.isSuccessful) {
@@ -61,8 +67,10 @@ class ChannelRepositoryImpl @Inject constructor(
             } else {
                 println("IPTV: Error en API: ${response.code()} - ${response.message()}")
             }
+        } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+            println("IPTV: ❌ TIMEOUT - API no responde en 15 segundos")
         } catch (e: Exception) {
-            println("IPTV: Exception: ${e.message}")
+            println("IPTV: ❌ Exception: ${e.message}")
             e.printStackTrace()
         }
     }

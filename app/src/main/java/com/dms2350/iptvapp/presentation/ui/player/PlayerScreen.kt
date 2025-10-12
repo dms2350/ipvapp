@@ -57,6 +57,14 @@ fun PlayerScreen(
                         viewModel.nextChannel()
                         true
                     }
+                    keyEvent.key == Key.DirectionUp && keyEvent.type == KeyEventType.KeyDown -> {
+                        viewModel.previousCategory()
+                        true
+                    }
+                    keyEvent.key == Key.DirectionDown && keyEvent.type == KeyEventType.KeyDown -> {
+                        viewModel.nextCategory()
+                        true
+                    }
                     keyEvent.key == Key.Back && keyEvent.type == KeyEventType.KeyDown -> {
                         onBackClick()
                         true
@@ -125,22 +133,40 @@ fun PlayerScreen(
                         .align(Alignment.TopStart)
                         .padding(16.dp)
                         .background(
-                            Color.Black.copy(alpha = 0.7f),
-                            shape = RoundedCornerShape(8.dp)
+                            Color.Black.copy(alpha = 0.8f),
+                            shape = RoundedCornerShape(12.dp)
                         )
-                        .padding(16.dp)
+                        .padding(20.dp)
                 ) {
-                    Column {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Nombre del canal
                         Text(
                             text = channel.name,
-                            color = Color.White
+                            color = Color.White,
+                            style = MaterialTheme.typography.headlineSmall
                         )
-                        if (channel.description != null) {
-                            Text(
-                                text = channel.description,
-                                color = Color.Gray
-                            )
-                        }
+                        
+                        // Categoría y número del canal en formato simplificado
+                        Text(
+                            text = "${uiState.categoryName} ${uiState.channelNumber}",
+                            color = Color(0xFF64B5F6),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        
+                        // Instrucciones de navegación
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "← → Cambiar canal",
+                            color = Color(0xFF4CAF50),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = "↑ ↓ Cambiar categoría",
+                            color = Color(0xFF4CAF50),
+                            style = MaterialTheme.typography.bodySmall
+                        )
                     }
                 }
             }

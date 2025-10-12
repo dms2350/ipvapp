@@ -194,6 +194,24 @@ class VLCPlayerManager @Inject constructor(
         return mediaPlayer.volume
     }
     
+    fun pausePlayback() {
+        try {
+            _mediaPlayer?.pause()
+            println("VLC: Pausado")
+        } catch (e: Exception) {
+            println("VLC: Error pausando: ${e.message}")
+        }
+    }
+    
+    fun resumePlayback() {
+        try {
+            _mediaPlayer?.play()
+            println("VLC: Reanudado")
+        } catch (e: Exception) {
+            println("VLC: Error reanudando: ${e.message}")
+        }
+    }
+    
     fun setOnChannelErrorListener(listener: () -> Unit) {
         onChannelError = listener
     }

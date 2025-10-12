@@ -1,8 +1,10 @@
 package com.dms2350.iptvapp.di
 
 import com.dms2350.iptvapp.data.repository.ChannelRepositoryImpl
+import com.dms2350.iptvapp.data.repository.CategoryRepositoryImpl
 import com.dms2350.iptvapp.data.repository.FavoriteRepositoryImpl
 import com.dms2350.iptvapp.domain.repository.ChannelRepository
+import com.dms2350.iptvapp.domain.repository.CategoryRepository
 import com.dms2350.iptvapp.domain.repository.FavoriteRepository
 import dagger.Binds
 import dagger.Module
@@ -25,4 +27,10 @@ abstract class RepositoryModule {
     abstract fun bindFavoriteRepository(
         favoriteRepositoryImpl: FavoriteRepositoryImpl
     ): FavoriteRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindCategoryRepository(
+        categoryRepositoryImpl: CategoryRepositoryImpl
+    ): CategoryRepository
 }

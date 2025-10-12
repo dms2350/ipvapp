@@ -3,6 +3,7 @@ package com.dms2350.iptvapp.presentation.ui.channels
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
@@ -106,6 +107,8 @@ fun ChannelsScreen(
             }
             
             else -> {
+                val groupedChannels = viewModel.getChannelsGroupedByCategory()
+                
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(3),
                     modifier = Modifier.fillMaxSize(),
@@ -113,11 +116,33 @@ fun ChannelsScreen(
                     verticalArrangement = Arrangement.spacedBy(if (isTV) 12.dp else 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(if (isTV) 12.dp else 8.dp)
                 ) {
-                    items(uiState.channels) { channel ->
-                        ChannelItem(
-                            channel = channel,
-                            onClick = { onChannelClick(channel) }
-                        )
+                    groupedChannels.forEach { (categoryName, channels) ->
+                        // Encabezado de categoría
+                        item(span = { GridItemSpan(3) }) {
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                                )
+                            ) {
+                                Text(
+                                    text = categoryName,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(16.dp),
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
+                        
+                        // Canales de esta categoría
+                        items(channels) { channel ->
+                            ChannelItem(
+                                channel = channel,
+                                onClick = { onChannelClick(channel) }
+                            )
+                        }
                     }
                 }
             }
