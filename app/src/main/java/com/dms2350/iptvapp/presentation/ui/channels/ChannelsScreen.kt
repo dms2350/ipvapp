@@ -33,7 +33,7 @@ fun ChannelsScreen(
     ) {
         if (!isTV) {
             TopAppBar(
-                title = { Text("Canales IPTV") },
+                title = { Text("PlayTV+") },
                 actions = {
                     IconButton(
                         onClick = { viewModel.refreshChannels() }
@@ -56,7 +56,7 @@ fun ChannelsScreen(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Canales IPTV",
+                    text = "PlayTV+",
                     style = MaterialTheme.typography.headlineMedium
                 )
                 Button(

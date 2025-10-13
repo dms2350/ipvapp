@@ -82,13 +82,7 @@ dependencies {
     kapt("com.google.dagger:hilt-compiler:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     
-    // ExoPlayer
-    implementation("androidx.media3:media3-exoplayer:1.2.0")
-    implementation("androidx.media3:media3-ui:1.2.0")
-    implementation("androidx.media3:media3-exoplayer-hls:1.2.0")
-    implementation("androidx.media3:media3-exoplayer-dash:1.2.0")
-    
-    // LibVLC
+    // LibVLC - Reproductor único
     implementation("org.videolan.android:libvlc-all:4.0.0-eap23")
     
     // Retrofit

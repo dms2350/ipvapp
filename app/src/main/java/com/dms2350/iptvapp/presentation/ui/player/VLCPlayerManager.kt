@@ -22,8 +22,16 @@ class VLCPlayerManager @Inject constructor(
     private var currentStreamUrl: String? = null
     private var isChangingChannel = false
     private var onChannelError: (() -> Unit)? = null
+    private var onBufferingIssue: (() -> Unit)? = null
+    private var onBufferingStart: (() -> Unit)? = null
     private val problematicChannels = mutableSetOf<String>()
     private var errorCount = 0
+    private var bufferingStartTime: Long = 0
+    private var isBuffering = false
+    private var bufferingNotified = false
+    private var isPlaybackStable = false // Nueva variable para saber si ya reprodujo bien
+    private var lastFixTime: Long = 0 // Timestamp del último fix aplicado
+    private val FIX_COOLDOWN = 5000L // 5 segundos entre fixes
 
     val mediaPlayer: MediaPlayer
         get() = _mediaPlayer ?: createPlayer()
@@ -42,6 +50,56 @@ class VLCPlayerManager @Inject constructor(
             // Agregar listener de errores
             _mediaPlayer!!.setEventListener { event ->
                 when (event.type) {
+                    MediaPlayer.Event.Buffering -> {
+                        val bufferPercent = event.buffering
+                        if (bufferPercent < 100f) {
+                            if (!isBuffering) {
+                                bufferingStartTime = System.currentTimeMillis()
+                                isBuffering = true
+                                bufferingNotified = false
+                                println("VLC: 🔄 Buffering iniciado (${bufferPercent}%)")
+                                
+                                // Verificar si está en cooldown después de un fix
+                                val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
+                                val inCooldown = timeSinceLastFix < FIX_COOLDOWN
+                                
+                                // Solo notificar inicio si la reproducción ya estaba estable Y no está en cooldown
+                                if (isPlaybackStable && !inCooldown) {
+                                    println("VLC: ⚠️ Re-buffering detectado (reproducción estaba estable)")
+                                    lastFixTime = System.currentTimeMillis() // Actualizar timestamp
+                                    onBufferingStart?.invoke()
+                                } else if (inCooldown) {
+                                    println("VLC: Buffering post-fix detectado - en cooldown (${timeSinceLastFix}ms/${FIX_COOLDOWN}ms)")
+                                } else {
+                                    println("VLC: Buffering inicial - no intervenir")
+                                }
+                            } else {
+                                val bufferingDuration = System.currentTimeMillis() - bufferingStartTime
+                                println("VLC: 🔄 Buffering... ${bufferPercent}% (${bufferingDuration}ms)")
+                                
+                                // Verificar cooldown también para buffering prolongado
+                                val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
+                                val inCooldown = timeSinceLastFix < FIX_COOLDOWN
+                                
+                                // Si lleva más de 3 segundos en buffering Y no está en cooldown, notificar
+                                if (bufferingDuration > 3000 && !bufferingNotified && !inCooldown) {
+                                    println("VLC: ⚠️ BUFFERING PROLONGADO (${bufferingDuration}ms) - Notificando")
+                                    lastFixTime = System.currentTimeMillis()
+                                    onBufferingIssue?.invoke()
+                                    bufferingNotified = true
+                                } else if (bufferingDuration > 3000 && inCooldown) {
+                                    println("VLC: Buffering prolongado pero en cooldown - esperando (${timeSinceLastFix}ms/${FIX_COOLDOWN}ms)")
+                                }
+                            }
+                        } else {
+                            if (isBuffering) {
+                                val bufferingDuration = System.currentTimeMillis() - bufferingStartTime
+                                println("VLC: ✅ Buffering completado (duró ${bufferingDuration}ms)")
+                                isBuffering = false
+                                bufferingNotified = false
+                            }
+                        }
+                    }
                     MediaPlayer.Event.EncounteredError -> {
                         println("VLC: Error en reproducción - saltando al siguiente canal")
                         currentStreamUrl?.let { url ->
@@ -50,6 +108,8 @@ class VLCPlayerManager @Inject constructor(
                         }
                         errorCount++
                         isChangingChannel = false
+                        isBuffering = false
+                        isPlaybackStable = false
                         
                         // Recrear player si hay muchos errores
                         if (errorCount >= 3) {
@@ -60,16 +120,38 @@ class VLCPlayerManager @Inject constructor(
                         onChannelError?.invoke()
                     }
                     MediaPlayer.Event.Playing -> {
-                        println("VLC: Reproducción iniciada exitosamente")
+                        println("VLC: ✅ Reproducción iniciada exitosamente")
                         isChangingChannel = false // Canal funcionando, liberar lock
+                        isBuffering = false
+                        bufferingNotified = false
+                        
+                        // Marcar reproducción como estable después de 2 segundos
+                        CoroutineScope(Dispatchers.IO).launch {
+                            delay(2000)
+                            isPlaybackStable = true
+                            println("VLC: 🎯 Reproducción estabilizada - monitoreando re-buffering")
+                        }
+                        
+                        // Limpiar lista negra cuando un canal reproduce bien
+                        if (problematicChannels.isNotEmpty()) {
+                            println("VLC: Canal reprodujo exitosamente - limpiando lista negra (${problematicChannels.size} canales)")
+                            problematicChannels.clear()
+                            println("VLC: ✨ Lista negra limpiada - todos los canales disponibles nuevamente")
+                        }
                     }
                     MediaPlayer.Event.EndReached -> {
                         println("VLC: Stream terminado")
                         isChangingChannel = false
+                        isBuffering = false
+                        bufferingNotified = false
+                        isPlaybackStable = false
                     }
                     MediaPlayer.Event.Stopped -> {
                         println("VLC: Reproducción detenida")
                         isChangingChannel = false
+                        isBuffering = false
+                        bufferingNotified = false
+                        isPlaybackStable = false
                     }
                 }
             }
@@ -98,6 +180,8 @@ class VLCPlayerManager @Inject constructor(
         
         isChangingChannel = true
         currentStreamUrl = streamUrl
+        isPlaybackStable = false // Resetear flag al cambiar de canal
+        lastFixTime = 0 // Resetear cooldown
         println("VLC: Reproduciendo: $streamUrl")
         
         try {
@@ -214,6 +298,14 @@ class VLCPlayerManager @Inject constructor(
     
     fun setOnChannelErrorListener(listener: () -> Unit) {
         onChannelError = listener
+    }
+    
+    fun setOnBufferingIssueListener(listener: () -> Unit) {
+        onBufferingIssue = listener
+    }
+    
+    fun setOnBufferingStartListener(listener: () -> Unit) {
+        onBufferingStart = listener
     }
     
     private fun recreatePlayer() {

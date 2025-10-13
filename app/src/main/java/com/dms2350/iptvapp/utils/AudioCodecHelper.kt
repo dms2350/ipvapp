@@ -1,10 +1,9 @@
 package com.dms2350.iptvapp.utils
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioManager
 import android.os.Build
-import androidx.media3.common.C
-import androidx.media3.common.Format
 
 object AudioCodecHelper {
     
@@ -67,8 +66,8 @@ object AudioCodecHelper {
         val isTV = context.packageManager.hasSystemFeature("android.software.leanback")
         
         return AudioConfiguration(
-            usage = if (isProblematicDevice) C.USAGE_VOICE_COMMUNICATION else C.USAGE_MEDIA,
-            contentType = if (isProblematicDevice) C.AUDIO_CONTENT_TYPE_SPEECH else C.AUDIO_CONTENT_TYPE_MOVIE,
+            usage = if (isProblematicDevice) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_MEDIA,
+            contentType = if (isProblematicDevice) AudioAttributes.CONTENT_TYPE_SPEECH else AudioAttributes.CONTENT_TYPE_MOVIE,
             handleAudioFocus = !isTV && !isProblematicDevice,
             handleAudioBecomingNoisy = !isTV && !isProblematicDevice,
             forceCompatibilityMode = isProblematicDevice
@@ -106,59 +105,11 @@ object AudioCodecHelper {
         }
     }
     
-    fun analyzeAudioFormat(format: Format): AudioAnalysis {
-        val codec = format.codecs ?: "unknown"
-        val sampleRate = format.sampleRate
-        val channels = format.channelCount
-        
-        val isProblematic = isCodecProblematic(codec)
-        val isCompatible = isCodecCompatible(codec)
-        val needsTranscoding = isProblematic && isDeviceProblematic()
-        
-        val recommendations = mutableListOf<String>()
-        
-        if (isProblematic) {
-            recommendations.add("Códec problemático detectado: $codec")
-        }
-        
-        if (channels > 2 && isDeviceProblematic()) {
-            recommendations.add("Canales múltiples ($channels) pueden causar problemas")
-        }
-        
-        if (sampleRate > 48000) {
-            recommendations.add("Sample rate alto ($sampleRate Hz) puede causar problemas")
-        }
-        
-        if (needsTranscoding) {
-            recommendations.add("Se recomienda transcodificación")
-        }
-        
-        return AudioAnalysis(
-            codec = codec,
-            sampleRate = sampleRate,
-            channels = channels,
-            isProblematic = isProblematic,
-            isCompatible = isCompatible,
-            needsTranscoding = needsTranscoding,
-            recommendations = recommendations
-        )
-    }
-    
     data class AudioConfiguration(
         val usage: Int,
         val contentType: Int,
         val handleAudioFocus: Boolean,
         val handleAudioBecomingNoisy: Boolean,
         val forceCompatibilityMode: Boolean
-    )
-    
-    data class AudioAnalysis(
-        val codec: String,
-        val sampleRate: Int,
-        val channels: Int,
-        val isProblematic: Boolean,
-        val isCompatible: Boolean,
-        val needsTranscoding: Boolean,
-        val recommendations: List<String>
     )
 }
