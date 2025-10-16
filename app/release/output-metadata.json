@@ -4,7 +4,7 @@
     "type": "APK",
     "kind": "Directory"
   },
-  "applicationId": "com.iptv",
+  "applicationId": "com.dms2350.iptvapp",
   "variantName": "release",
   "elements": [
     {

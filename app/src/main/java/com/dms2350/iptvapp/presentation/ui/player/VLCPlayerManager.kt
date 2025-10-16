@@ -57,7 +57,7 @@ class VLCPlayerManager @Inject constructor(
                                 bufferingStartTime = System.currentTimeMillis()
                                 isBuffering = true
                                 bufferingNotified = false
-                                println("VLC: 🔄 Buffering iniciado (${bufferPercent}%)")
+                                println("VLC: Buffering iniciado (${bufferPercent}%)")
                                 
                                 // Verificar si está en cooldown después de un fix
                                 val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
@@ -65,7 +65,7 @@ class VLCPlayerManager @Inject constructor(
                                 
                                 // Solo notificar inicio si la reproducción ya estaba estable Y no está en cooldown
                                 if (isPlaybackStable && !inCooldown) {
-                                    println("VLC: ⚠️ Re-buffering detectado (reproducción estaba estable)")
+                                    println("VLC: Re-buffering detectado (reproducción estaba estable)")
                                     lastFixTime = System.currentTimeMillis() // Actualizar timestamp
                                     onBufferingStart?.invoke()
                                 } else if (inCooldown) {
@@ -75,7 +75,7 @@ class VLCPlayerManager @Inject constructor(
                                 }
                             } else {
                                 val bufferingDuration = System.currentTimeMillis() - bufferingStartTime
-                                println("VLC: 🔄 Buffering... ${bufferPercent}% (${bufferingDuration}ms)")
+                                println("VLC: Buffering... ${bufferPercent}% (${bufferingDuration}ms)")
                                 
                                 // Verificar cooldown también para buffering prolongado
                                 val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
@@ -83,7 +83,7 @@ class VLCPlayerManager @Inject constructor(
                                 
                                 // Si lleva más de 3 segundos en buffering Y no está en cooldown, notificar
                                 if (bufferingDuration > 3000 && !bufferingNotified && !inCooldown) {
-                                    println("VLC: ⚠️ BUFFERING PROLONGADO (${bufferingDuration}ms) - Notificando")
+                                    println("VLC: BUFFERING PROLONGADO (${bufferingDuration}ms) - Notificando")
                                     lastFixTime = System.currentTimeMillis()
                                     onBufferingIssue?.invoke()
                                     bufferingNotified = true
@@ -94,7 +94,7 @@ class VLCPlayerManager @Inject constructor(
                         } else {
                             if (isBuffering) {
                                 val bufferingDuration = System.currentTimeMillis() - bufferingStartTime
-                                println("VLC: ✅ Buffering completado (duró ${bufferingDuration}ms)")
+                                println("VLC: Buffering completado (duró ${bufferingDuration}ms)")
                                 isBuffering = false
                                 bufferingNotified = false
                             }
@@ -120,7 +120,7 @@ class VLCPlayerManager @Inject constructor(
                         onChannelError?.invoke()
                     }
                     MediaPlayer.Event.Playing -> {
-                        println("VLC: ✅ Reproducción iniciada exitosamente")
+                        println("VLC: Reproducción iniciada exitosamente")
                         isChangingChannel = false // Canal funcionando, liberar lock
                         isBuffering = false
                         bufferingNotified = false
@@ -129,14 +129,14 @@ class VLCPlayerManager @Inject constructor(
                         CoroutineScope(Dispatchers.IO).launch {
                             delay(2000)
                             isPlaybackStable = true
-                            println("VLC: 🎯 Reproducción estabilizada - monitoreando re-buffering")
+                            println("VLC: Reproducción estabilizada - monitoreando re-buffering")
                         }
                         
                         // Limpiar lista negra cuando un canal reproduce bien
                         if (problematicChannels.isNotEmpty()) {
                             println("VLC: Canal reprodujo exitosamente - limpiando lista negra (${problematicChannels.size} canales)")
                             problematicChannels.clear()
-                            println("VLC: ✨ Lista negra limpiada - todos los canales disponibles nuevamente")
+                            println("VLC: Lista negra limpiada - todos los canales disponibles nuevamente")
                         }
                     }
                     MediaPlayer.Event.EndReached -> {
@@ -152,6 +152,58 @@ class VLCPlayerManager @Inject constructor(
                         isBuffering = false
                         bufferingNotified = false
                         isPlaybackStable = false
+                    }
+                    MediaPlayer.Event.ESAdded -> {
+                        println("VLC: Nueva pista de stream detectada (video/audio)")
+                        // Verificar cooldown
+                        val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
+                        val inCooldown = timeSinceLastFix < FIX_COOLDOWN
+                        
+                        // Solo aplicar fix si ya estaba estable Y no está en cooldown
+                        // Y ha pasado suficiente tiempo desde que inició la reproducción
+                        if (isPlaybackStable && !inCooldown && timeSinceLastFix > 10000) {
+                            println("VLC: Cambio de formato detectado después de reproducción estable - Aplicando fix preventivo")
+                            lastFixTime = System.currentTimeMillis()
+                            onBufferingStart?.invoke()
+                        } else if (inCooldown) {
+                            println("VLC: Nueva pista detectada pero en cooldown - ignorando (${timeSinceLastFix}ms/${FIX_COOLDOWN}ms)")
+                        } else {
+                            println("VLC: Nueva pista detectada durante inicialización - normal")
+                        }
+                    }
+                    MediaPlayer.Event.ESDeleted -> {
+                        println("VLC: Pista de stream eliminada")
+                        // Verificar cooldown
+                        val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
+                        val inCooldown = timeSinceLastFix < FIX_COOLDOWN
+                        
+                        // Solo aplicar fix si ya estaba estable Y no está en cooldown
+                        if (isPlaybackStable && !inCooldown && timeSinceLastFix > 10000) {
+                            println("VLC: Pérdida de pista durante reproducción estable - Aplicando fix")
+                            lastFixTime = System.currentTimeMillis()
+                            onBufferingStart?.invoke()
+                        } else if (inCooldown) {
+                            println("VLC: Pista eliminada pero en cooldown - ignorando (${timeSinceLastFix}ms/${FIX_COOLDOWN}ms)")
+                        } else {
+                            println("VLC: Pista eliminada durante inicialización - normal")
+                        }
+                    }
+                    MediaPlayer.Event.Vout -> {
+                        val voutCount = event.voutCount
+                        println("VLC: Video output cambió: $voutCount salidas")
+                        
+                        // Verificar cooldown
+                        val timeSinceLastFix = System.currentTimeMillis() - lastFixTime
+                        val inCooldown = timeSinceLastFix < FIX_COOLDOWN
+                        
+                        // Solo actuar si video output se perdió (0) durante reproducción estable
+                        if (voutCount == 0 && isPlaybackStable && !inCooldown && timeSinceLastFix > 10000) {
+                            println("VLC: Video output perdido durante reproducción - posible congelamiento")
+                            lastFixTime = System.currentTimeMillis()
+                            onBufferingStart?.invoke()
+                        } else if (voutCount == 0 && inCooldown) {
+                            println("VLC: Video output perdido pero en cooldown - ignorando")
+                        }
                     }
                 }
             }

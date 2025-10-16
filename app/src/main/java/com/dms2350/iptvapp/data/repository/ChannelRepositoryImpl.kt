@@ -52,7 +52,7 @@ class ChannelRepositoryImpl @Inject constructor(
             }
             val endTime = System.currentTimeMillis()
             
-            println("IPTV: ✅ API respondió en ${endTime - startTime}ms")
+            println("IPTV: API respondió en ${endTime - startTime}ms")
             println("IPTV: Response code: ${response.code()}")
             
             if (response.isSuccessful) {
@@ -68,9 +68,9 @@ class ChannelRepositoryImpl @Inject constructor(
                 println("IPTV: Error en API: ${response.code()} - ${response.message()}")
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            println("IPTV: ❌ TIMEOUT - API no responde en 15 segundos")
+            println("IPTV: TIMEOUT - API no responde en 15 segundos")
         } catch (e: Exception) {
-            println("IPTV: ❌ Exception: ${e.message}")
+            println("IPTV: Exception: ${e.message}")
             e.printStackTrace()
         }
     }

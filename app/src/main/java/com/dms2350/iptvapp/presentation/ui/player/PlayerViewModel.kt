@@ -42,6 +42,9 @@ class PlayerViewModel @Inject constructor(
     private var lastPosition: Long = 0
     private var positionCheckCount = 0
     private var bufferHealthCheckCount = 0
+    private var isApplyingFix = false // Nueva variable para evitar fixes simultáneos
+    private var lastMusicFixTime: Long = 0 // Timestamp del último fix aplicado
+    private val MUSIC_FIX_COOLDOWN = 8000L // Cooldown de 8 segundos entre fixes
     
     // Variables para el monitor de video (todos los canales)
     private var videoMonitorJob: Job? = null
@@ -72,14 +75,22 @@ class PlayerViewModel @Inject constructor(
         // Configurar listener para inicio de buffering (solo canales de música)
         vlcPlayerManager.setOnBufferingStartListener {
             val currentChannel = _uiState.value.currentChannel
-            if (currentChannel != null && isMusicChannel(currentChannel)) {
+            if (currentChannel != null && isMusicChannel(currentChannel) && !isApplyingFix) {
                 println("IPTV: MÚSICA - Buffering detectado - Aplicando fix preventivo inmediato")
+                isApplyingFix = true
                 viewModelScope.launch(Dispatchers.Main) {
-                    vlcPlayerManager.pausePlayback()
-                    delay(800) // Pausa corta
-                    vlcPlayerManager.resumePlayback()
-                    println("IPTV: MÚSICA - Fix preventivo aplicado")
+                    try {
+                        vlcPlayerManager.pausePlayback()
+                        delay(800) // Pausa corta
+                        vlcPlayerManager.resumePlayback()
+                        println("IPTV: MÚSICA - Fix preventivo aplicado")
+                    } finally {
+                        delay(1000) // Esperar 1 segundo adicional
+                        isApplyingFix = false
+                    }
                 }
+            } else if (isApplyingFix) {
+                println("IPTV: MÚSICA - Fix ya en progreso, ignorando evento")
             }
         }
     }
@@ -444,77 +455,143 @@ class PlayerViewModel @Inject constructor(
         lastPosition = 0
         positionCheckCount = 0
         bufferHealthCheckCount = 0
+        lastMusicFixTime = 0 // Resetear cooldown al iniciar nuevo monitor
         var frozenCyclesCount = 0
+        var stablePlaybackCount = 0
         
-        println("IPTV: MÚSICA - ===== Iniciando monitor de transiciones de video =====")
+        println("IPTV: MÚSICA - ===== Iniciando monitor de congelamiento agresivo =====")
+        println("IPTV: MÚSICA - Cooldown entre fixes: ${MUSIC_FIX_COOLDOWN}ms (${MUSIC_FIX_COOLDOWN/1000}s)")
         
         musicMonitorJob = viewModelScope.launch {
-            kotlinx.coroutines.delay(4000) // Esperar 4 segundos para estabilización inicial
+            kotlinx.coroutines.delay(3000) // Reducido a 3 segundos para detección más rápida
             
-            // Monitor simplificado - detecta solo cambios de video
-            // El buffering prolongado se detecta por eventos de VLC
+            // Monitor agresivo: verifica cada 1 segundo en lugar de 2
             while (musicMonitorJob?.isActive == true) {
                 try {
                     // Si está en pausa manual, solo esperar sin monitorear
                     if (!_uiState.value.isPlaying) {
                         println("IPTV: MÚSICA - Monitor: En pausa, esperando...")
-                        frozenCyclesCount = 0 // Resetear contador
-                        kotlinx.coroutines.delay(2000)
+                        frozenCyclesCount = 0
+                        stablePlaybackCount = 0
+                        kotlinx.coroutines.delay(1000)
                         continue
                     }
                     
-                    // Obtener posición
-                    val currentPosition = kotlinx.coroutines.withTimeoutOrNull(1000) {
+                    // Obtener estado de VLC
+                    val vlcState = kotlinx.coroutines.withTimeoutOrNull(800) {
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                             try {
-                                vlcPlayerManager.mediaPlayer.time
+                                Pair(
+                                    vlcPlayerManager.mediaPlayer.isPlaying,
+                                    vlcPlayerManager.mediaPlayer.time
+                                )
                             } catch (e: Exception) {
                                 println("IPTV: MÚSICA - Monitor: Error accediendo VLC: ${e.message}")
-                                -1L
+                                Pair(false, -1L)
                             }
                         }
                     }
                     
-                    if (currentPosition == null || currentPosition == -1L) {
-                        println("IPTV: MÚSICA - Monitor: ⚠️ Error obteniendo posición de VLC")
-                        kotlinx.coroutines.delay(3000)
+                    if (vlcState == null || vlcState.second == -1L) {
+                        println("IPTV: MÚSICA - Monitor: Error obteniendo estado de VLC")
+                        kotlinx.coroutines.delay(2000)
                         continue
                     }
                     
+                    val (isVlcPlaying, currentPosition) = vlcState
                     val positionDelta = currentPosition - lastPosition
+                    val currentTime = System.currentTimeMillis()
+                    val timeSinceLastFix = currentTime - lastMusicFixTime
+                    val isInCooldown = timeSinceLastFix < MUSIC_FIX_COOLDOWN
                     
-                    println("IPTV: MÚSICA - Monitor: Pos=${currentPosition}ms (Δ${positionDelta}ms)")
+                    println("IPTV: MÚSICA - Monitor: VLC.isPlaying=$isVlcPlaying, Pos=${currentPosition}ms (Δ${positionDelta}ms), Frozen=$frozenCyclesCount, Cooldown=${if(isInCooldown) "${MUSIC_FIX_COOLDOWN - timeSinceLastFix}ms" else "NO"}")
                     
-                    // DETECCIÓN: CAMBIO DE VIDEO (posición retrocedió o saltó mucho)
-                    // En canales de música, cuando termina un video y empieza otro, la posición puede retroceder
-                    if (lastPosition > 0 && (positionDelta < -5000 || positionDelta > 60000)) {
-                        println("IPTV: MÚSICA - Monitor: 🎵 CAMBIO DE VIDEO detectado (salto de ${positionDelta}ms) - Aplicando fix preventivo")
+                    // DETECCIÓN 1: CAMBIO DE VIDEO (salto grande de posición)
+                    // Reducido el umbral a 30 segundos para detección más rápida
+                    if (lastPosition > 0 && (positionDelta < -3000 || positionDelta > 30000)) {
+                        if (isInCooldown) {
+                            println("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - IGNORANDO para evitar sobrecarga")
+                            lastPosition = currentPosition
+                            frozenCyclesCount = 0
+                            kotlinx.coroutines.delay(1000)
+                            continue
+                        }
+                        
+                        println("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado (salto de ${positionDelta}ms) - Aplicando fix")
+                        lastMusicFixTime = currentTime
                         
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vlcPlayerManager.pausePlayback()
-                            println("IPTV: MÚSICA - Monitor: ⏸️ PAUSADO (preventivo)")
-                            kotlinx.coroutines.delay(1500)
+                            println("IPTV: MÚSICA - Monitor: PAUSADO (transición)")
+                            kotlinx.coroutines.delay(1500) // Pausa más larga para limpiar decoder
                             vlcPlayerManager.resumePlayback()
-                            println("IPTV: MÚSICA - Monitor: ▶️ RESUMIDO - Transición de video asegurada")
+                            println("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder reiniciado")
                         }
                         
+                        frozenCyclesCount = 0
+                        stablePlaybackCount = 0
                         lastPosition = currentPosition
                         kotlinx.coroutines.delay(3000)
                         continue
                     }
                     
-                    // Actualizar posición
-                    if (currentPosition > 0) {
+                    // DETECCIÓN 2: VIDEO CONGELADO (posición no avanza)
+                    // Reducido a 2 ciclos (2 segundos) en lugar de 3 ciclos (6 segundos)
+                    if (isVlcPlaying && currentPosition == lastPosition && currentPosition > 0) {
+                        frozenCyclesCount++
+                        stablePlaybackCount = 0
+                        println("IPTV: MÚSICA - Monitor: VIDEO CONGELADO detectado (ciclo $frozenCyclesCount/2)")
+                        
+                        // Si lleva 2 ciclos consecutivos congelado (2 segundos), aplicar fix
+                        if (frozenCyclesCount >= 2) {
+                            if (isInCooldown) {
+                                println("IPTV: MÚSICA - Monitor: CONGELAMIENTO confirmado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - ESPERANDO")
+                                kotlinx.coroutines.delay(1000)
+                                continue
+                            }
+                            
+                            println("IPTV: MÚSICA - Monitor: DEADLOCK/CONGELAMIENTO CONFIRMADO - Aplicando fix urgente")
+                            lastMusicFixTime = currentTime
+                            
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+                                vlcPlayerManager.pausePlayback()
+                                println("IPTV: MÚSICA - Monitor: PAUSADO (deadlock)")
+                                kotlinx.coroutines.delay(1500) // Pausa larga para limpiar decoder
+                                vlcPlayerManager.resumePlayback()
+                                println("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder debería recuperarse")
+                            }
+                            
+                            frozenCyclesCount = 0
+                            lastPosition = 0
+                            kotlinx.coroutines.delay(3000)
+                            continue
+                        }
+                    }
+                    // Posición avanzando normalmente
+                    else if (currentPosition > lastPosition) {
+                        stablePlaybackCount++
+                        
+                        if (frozenCyclesCount > 0) {
+                            println("IPTV: MÚSICA - Monitor: Video recuperado (avanzó ${positionDelta}ms)")
+                        }
+                        
+                        frozenCyclesCount = 0
                         lastPosition = currentPosition
                     }
+                    // VLC pausado externamente
+                    else if (!isVlcPlaying) {
+                        frozenCyclesCount = 0
+                        stablePlaybackCount = 0
+                    }
                     
-                    // Verificar cada 2 segundos
-                    kotlinx.coroutines.delay(2000)
+                    // Verificar cada 1 segundo (más agresivo)
+                    kotlinx.coroutines.delay(1000)
                     
                 } catch (e: Exception) {
-                    println("IPTV: MÚSICA - Monitor: ❌ Error: ${e.message}")
+                    println("IPTV: MÚSICA - Monitor: Error: ${e.message}")
                     e.printStackTrace()
-                    kotlinx.coroutines.delay(3000)
+                    frozenCyclesCount = 0
+                    kotlinx.coroutines.delay(2000)
                 }
             }
             
@@ -525,6 +602,7 @@ class PlayerViewModel @Inject constructor(
     private fun stopMusicMonitor() {
         musicMonitorJob?.cancel()
         musicMonitorJob = null
+        lastMusicFixTime = 0 // Resetear cooldown al detener monitor
         println("IPTV: MÚSICA - Monitor detenido")
     }
     

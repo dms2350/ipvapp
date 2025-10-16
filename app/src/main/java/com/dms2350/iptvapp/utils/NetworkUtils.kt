@@ -35,7 +35,7 @@ object NetworkUtils {
             // Test 1: Conectividad básica a internet
             println("IPTV: Test 1 - Conectividad básica a Google...")
             val googleTest = testConnection("https://www.google.com", 5000)
-            println("IPTV: Google test: ${if (googleTest) "✅ OK" else "❌ FAIL"}")
+            println("IPTV: Google test: ${if (googleTest) "OK" else "FAIL"}")
             
             if (!googleTest) {
                 return@withContext ApiConnectivityResult.NO_INTERNET
@@ -44,12 +44,12 @@ object NetworkUtils {
             // Test 2: Conectividad al dominio Railway
             println("IPTV: Test 2 - Conectividad a Railway...")
             val railwayTest = testConnection("https://railway.app", 10000)
-            println("IPTV: Railway test: ${if (railwayTest) "✅ OK" else "❌ FAIL"}")
+            println("IPTV: Railway test: ${if (railwayTest) "OK" else "FAIL"}")
             
             // Test 3: Conectividad específica a nuestra API
             println("IPTV: Test 3 - Conectividad a nuestra API...")
-            val apiTest = testConnection("https://tvapi-production-9aa9.up.railway.app/", 15000)
-            println("IPTV: API test: ${if (apiTest) "✅ OK" else "❌ FAIL"}")
+            val apiTest = testConnection("https://playtv-production.up.railway.app/", 15000)
+            println("IPTV: API test: ${if (apiTest) "OK" else "FAIL"}")
             
             if (!apiTest) {
                 return@withContext if (railwayTest) {
@@ -61,8 +61,8 @@ object NetworkUtils {
             
             // Test 4: Endpoint específico de canales
             println("IPTV: Test 4 - Endpoint de canales...")
-            val channelsTest = testConnection("https://tvapi-production-9aa9.up.railway.app/channels", 15000)
-            println("IPTV: Channels endpoint test: ${if (channelsTest) "✅ OK" else "❌ FAIL"}")
+            val channelsTest = testConnection("https://playtv-production.up.railway.app/channels", 15000)
+            println("IPTV: Channels endpoint test: ${if (channelsTest) "OK" else "FAIL"}")
             
             return@withContext if (channelsTest) {
                 ApiConnectivityResult.ALL_OK
@@ -108,12 +108,12 @@ object NetworkUtils {
     
     fun getConnectivityMessage(result: ApiConnectivityResult): String {
         return when (result) {
-            ApiConnectivityResult.ALL_OK -> "✅ Conectividad perfecta"
-            ApiConnectivityResult.NO_INTERNET -> "❌ Sin conexión a internet"
-            ApiConnectivityResult.RAILWAY_BLOCKED -> "❌ Railway.app bloqueado (firewall/ISP)"
-            ApiConnectivityResult.API_DOWN -> "❌ API temporalmente caída"
-            ApiConnectivityResult.ENDPOINT_ERROR -> "❌ Problema con endpoint /channels"
-            ApiConnectivityResult.UNKNOWN_ERROR -> "❌ Error desconocido"
+            ApiConnectivityResult.ALL_OK -> "Conectividad perfecta"
+            ApiConnectivityResult.NO_INTERNET -> "Sin conexión a internet"
+            ApiConnectivityResult.RAILWAY_BLOCKED -> "Railway.app bloqueado (firewall/ISP)"
+            ApiConnectivityResult.API_DOWN -> "API temporalmente caída"
+            ApiConnectivityResult.ENDPOINT_ERROR -> "Problema con endpoint /channels"
+            ApiConnectivityResult.UNKNOWN_ERROR -> "Error desconocido"
         }
     }
 }
