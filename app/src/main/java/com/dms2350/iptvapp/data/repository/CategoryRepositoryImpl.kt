@@ -10,6 +10,7 @@ import com.dms2350.iptvapp.domain.model.Category
 import com.dms2350.iptvapp.domain.repository.CategoryRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,7 +39,7 @@ class CategoryRepositoryImpl @Inject constructor(
                 database.categoryDao().insertCategories(entities)
             }
         } catch (e: Exception) {
-            println("Error refreshing categories: ${e.message}")
+            Timber.d("Error refreshing categories: ${e.message}")
         }
     }
 }

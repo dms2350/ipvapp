@@ -1,7 +1,7 @@
 package com.dms2350.iptvapp.utils
 
 object Constants {
-    const val BASE_URL = "https://playtv-production.up.railway.app/"
+    const val BASE_URL = "http://192.168.1.5:8000/"
     const val TIMEOUT_SECONDS = 30L
     
     // Player constants

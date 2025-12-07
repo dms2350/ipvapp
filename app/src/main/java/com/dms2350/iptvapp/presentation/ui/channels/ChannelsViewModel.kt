@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -34,29 +35,29 @@ class ChannelsViewModel @Inject constructor(
 
     private fun loadChannels() {
         viewModelScope.launch {
-            println("IPTV: === CARGANDO CANALES DESDE BD LOCAL ===")
+            Timber.d("IPTV: === CARGANDO CANALES DESDE BD LOCAL ===")
             getChannelsUseCase().collect { channels ->
-                println("IPTV: Canales cargados desde BD: ${channels.size}")
+                Timber.d("IPTV: Canales cargados desde BD: ${channels.size}")
                 _uiState.value = _uiState.value.copy(
                     channels = channels,
                     isLoading = false
                 )
                 
                 if (channels.isEmpty()) {
-                    println("IPTV: WARNING: No hay canales en BD local")
+                    Timber.d("IPTV: WARNING: No hay canales en BD local")
                 } else {
-                    println("IPTV: OK: ${channels.size} canales disponibles")
+                    Timber.d("IPTV: OK: ${channels.size} canales disponibles")
                     
                     // Mostrar agrupación por categorías
                     val groupedChannels = getChannelsGroupedByCategory()
-                    println("IPTV: === CANALES AGRUPADOS POR CATEGORÍA ===")
+                    Timber.d("IPTV: === CANALES AGRUPADOS POR CATEGORÍA ===")
                     groupedChannels.forEach { (categoryName, categoryChannels) ->
-                        println("IPTV: Categoría '$categoryName': ${categoryChannels.size} canales")
+                        Timber.d("IPTV: Categoría '$categoryName': ${categoryChannels.size} canales")
                         categoryChannels.take(2).forEach { channel ->
-                            println("IPTV:   - ${channel.name}")
+                            Timber.d("IPTV:   - ${channel.name}")
                         }
                     }
-                    println("IPTV: ========================================")
+                    Timber.d("IPTV: ========================================")
                 }
             }
         }
@@ -64,34 +65,34 @@ class ChannelsViewModel @Inject constructor(
 
     private fun loadCategories() {
         viewModelScope.launch {
-            println("IPTV: === CARGANDO CATEGORIAS ===")
+            Timber.d("IPTV: === CARGANDO CATEGORIAS ===")
             try {
                 categoryRepository.getAllCategories().collect { categories ->
                     val categoryMap = categories.associate { it.id to it.name }
                     val categoryOrder = categories.associate { it.id to it.sortOrder }
-                    println("IPTV: Categorias cargadas: ${categoryMap.size}")
+                    Timber.d("IPTV: Categorias cargadas: ${categoryMap.size}")
                     _uiState.value = _uiState.value.copy(
                         categories = categoryMap,
                         categoryOrder = categoryOrder
                     )
                 }
             } catch (e: Exception) {
-                println("IPTV: Error cargando categorias: ${e.message}")
+                Timber.d("IPTV: Error cargando categorias: ${e.message}")
             }
         }
     }
 
     fun refreshChannels() {
         viewModelScope.launch {
-            println("IPTV: === INICIANDO REFRESH CHANNELS ===")
+            Timber.d("IPTV: === INICIANDO REFRESH CHANNELS ===")
             _uiState.value = _uiState.value.copy(isLoading = true)
             try {
-                println("IPTV: Llamando channelRepository.refreshChannels()")
+                Timber.d("IPTV: Llamando channelRepository.refreshChannels()")
                 channelRepository.refreshChannels()
                 categoryRepository.refreshCategories()
-                println("IPTV: refreshChannels() completado")
+                Timber.d("IPTV: refreshChannels() completado")
             } catch (e: Exception) {
-                println("IPTV: Error en refreshChannels(): ${e.message}")
+                Timber.d("IPTV: Error en refreshChannels(): ${e.message}")
                 e.printStackTrace()
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
@@ -196,3 +197,4 @@ data class ChannelsUiState(
     val isLoading: Boolean = true,
     val error: String? = null
 )
+

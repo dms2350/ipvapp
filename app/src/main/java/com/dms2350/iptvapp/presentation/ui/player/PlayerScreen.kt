@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import org.videolan.libvlc.util.VLCVideoLayout
+import timber.log.Timber
 import com.dms2350.iptvapp.domain.model.Channel
 
 @Composable
@@ -114,7 +115,7 @@ fun PlayerScreen(
                     try {
                         viewModel.mediaPlayer.attachViews(vlcLayout, null, true, false)
                     } catch (e: Exception) {
-                        println("VLC: Error: ${e.message}")
+                        Timber.d("VLC: Error: ${e.message}")
                     }
                 },
                 modifier = Modifier
@@ -215,3 +216,4 @@ fun PlayerScreen(
         }
     }
 }
+

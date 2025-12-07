@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -57,16 +58,16 @@ class PlayerViewModel @Inject constructor(
         vlcPlayerManager.setOnChannelErrorListener {
             // Solo auto-skip si no es navegación manual desde menú
             if (_uiState.value.isPlaying) {
-                println("IPTV: Canal no funciona - saltando al siguiente")
+                Timber.d("IPTV: Canal no funciona - saltando al siguiente")
                 nextChannel()
             } else {
-                println("IPTV: Error en canal pero no auto-skip (navegación manual)")
+                Timber.d("IPTV: Error en canal pero no auto-skip (navegación manual)")
             }
         }
         
         // Configurar listener para buffering prolongado
         vlcPlayerManager.setOnBufferingIssueListener {
-            println("IPTV: BUFFERING PROLONGADO detectado - Aplicando fix")
+            Timber.d("IPTV: BUFFERING PROLONGADO detectado - Aplicando fix")
             viewModelScope.launch(Dispatchers.Main) {
                 pauseResume()
             }
@@ -76,21 +77,21 @@ class PlayerViewModel @Inject constructor(
         vlcPlayerManager.setOnBufferingStartListener {
             val currentChannel = _uiState.value.currentChannel
             if (currentChannel != null && isMusicChannel(currentChannel) && !isApplyingFix) {
-                println("IPTV: MÚSICA - Buffering detectado - Aplicando fix preventivo inmediato")
+                Timber.d("IPTV: MÚSICA - Buffering detectado - Aplicando fix preventivo inmediato")
                 isApplyingFix = true
                 viewModelScope.launch(Dispatchers.Main) {
                     try {
                         vlcPlayerManager.pausePlayback()
                         delay(800) // Pausa corta
                         vlcPlayerManager.resumePlayback()
-                        println("IPTV: MÚSICA - Fix preventivo aplicado")
+                        Timber.d("IPTV: MÚSICA - Fix preventivo aplicado")
                     } finally {
                         delay(1000) // Esperar 1 segundo adicional
                         isApplyingFix = false
                     }
                 }
             } else if (isApplyingFix) {
-                println("IPTV: MÚSICA - Fix ya en progreso, ignorando evento")
+                Timber.d("IPTV: MÚSICA - Fix ya en progreso, ignorando evento")
             }
         }
     }
@@ -100,9 +101,9 @@ class PlayerViewModel @Inject constructor(
             try {
                 allChannels = channelRepository.getAllChannels().first()
                 updateChannelsByCategory()
-                println("IPTV: Canales cargados: ${allChannels.size}")
+                Timber.d("IPTV: Canales cargados: ${allChannels.size}")
             } catch (e: Exception) {
-                println("IPTV: Error cargando canales: ${e.message}")
+                Timber.d("IPTV: Error cargando canales: ${e.message}")
             }
         }
     }
@@ -113,10 +114,10 @@ class PlayerViewModel @Inject constructor(
                 categoryRepository.getAllCategories().collect { categoriesList ->
                     categories = categoriesList.associate { it.id to it.name }
                     updateChannelsByCategory()
-                    println("IPTV: Categorías cargadas: ${categories.size}")
+                    Timber.d("IPTV: Categorías cargadas: ${categories.size}")
                 }
             } catch (e: Exception) {
-                println("IPTV: Error cargando categorías: ${e.message}")
+                Timber.d("IPTV: Error cargando categorías: ${e.message}")
             }
         }
     }
@@ -129,7 +130,7 @@ class PlayerViewModel @Inject constructor(
 
     fun playChannel(channel: Channel) {
         viewModelScope.launch {
-            println("IPTV: Iniciando reproducción de: ${channel.name} - URL: ${channel.streamUrl}")
+            Timber.d("IPTV: Iniciando reproducción de: ${channel.name} - URL: ${channel.streamUrl}")
             
             // Asegurar que los datos estén cargados antes de mostrar la información
             ensureDataLoaded()
@@ -164,13 +165,13 @@ class PlayerViewModel @Inject constructor(
                 
                 // Iniciar monitor apropiado según tipo de canal
                 val isMusic = isMusicChannel(channel)
-                println("IPTV: MÚSICA - Verificando canal '${channel.name}' en categoría '${getCategoryNameForChannel(channel)}': ${if (isMusic) "ES MÚSICA" else "NO ES MÚSICA"}")
+                Timber.d("IPTV: MÚSICA - Verificando canal '${channel.name}' en categoría '${getCategoryNameForChannel(channel)}': ${if (isMusic) "ES MÚSICA" else "NO ES MÚSICA"}")
                 
                 if (isMusic) {
-                    println("IPTV: MÚSICA - Activando monitor agresivo para canal de música: ${channel.name}")
+                    Timber.d("IPTV: MÚSICA - Activando monitor agresivo para canal de música: ${channel.name}")
                     startMusicMonitor()
                 } else {
-                    println("IPTV: VIDEO - Activando monitor de sincronización A/V para: ${channel.name}")
+                    Timber.d("IPTV: VIDEO - Activando monitor de sincronización A/V para: ${channel.name}")
                     startVideoMonitor()
                 }
                 
@@ -181,9 +182,9 @@ class PlayerViewModel @Inject constructor(
                     showControls = false
                 )
                 
-                println("IPTV: Reproducción iniciada exitosamente")
+                Timber.d("IPTV: Reproducción iniciada exitosamente")
             } catch (e: Exception) {
-                println("IPTV: Error en playChannel: ${e.message}")
+                Timber.d("IPTV: Error en playChannel: ${e.message}")
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isPlaying = false,
@@ -195,11 +196,11 @@ class PlayerViewModel @Inject constructor(
 
     fun pauseResume() {
         if (_uiState.value.isPlaying) {
-            println("IPTV: Pausa manual solicitada")
+            Timber.d("IPTV: Pausa manual solicitada")
             vlcPlayerManager.pause()
             _uiState.value = _uiState.value.copy(isPlaying = false)
         } else {
-            println("IPTV: Resume manual solicitado")
+            Timber.d("IPTV: Resume manual solicitado")
             vlcPlayerManager.resume()
             _uiState.value = _uiState.value.copy(isPlaying = true)
             
@@ -207,7 +208,7 @@ class PlayerViewModel @Inject constructor(
             val currentChannel = _uiState.value.currentChannel
             if (currentChannel != null && isMusicChannel(currentChannel)) {
                 if (musicMonitorJob?.isActive != true) {
-                    println("IPTV: MÚSICA - Reiniciando monitor después de resume manual")
+                    Timber.d("IPTV: MÚSICA - Reiniciando monitor después de resume manual")
                     startMusicMonitor()
                 }
             }
@@ -255,7 +256,7 @@ class PlayerViewModel @Inject constructor(
                     if (newChannelsInCategory.isNotEmpty()) {
                         val nextChannel = newChannelsInCategory[0]
                         currentChannelIndex = allChannels.indexOfFirst { it.id == nextChannel.id }
-                        println("IPTV: Pasando a siguiente categoría '$newCategoryName' - Canal 1/${newChannelsInCategory.size}")
+                        Timber.d("IPTV: Pasando a siguiente categoría '$newCategoryName' - Canal 1/${newChannelsInCategory.size}")
                         playChannel(nextChannel)
                     }
                 } else {
@@ -263,7 +264,7 @@ class PlayerViewModel @Inject constructor(
                     currentChannelInCategoryIndex++
                     val nextChannel = channelsInCategory[currentChannelInCategoryIndex]
                     currentChannelIndex = allChannels.indexOfFirst { it.id == nextChannel.id }
-                    println("IPTV: Siguiente canal en categoría '$currentCategoryName' - ${currentChannelInCategoryIndex + 1}/${channelsInCategory.size}")
+                    Timber.d("IPTV: Siguiente canal en categoría '$currentCategoryName' - ${currentChannelInCategoryIndex + 1}/${channelsInCategory.size}")
                     playChannel(nextChannel)
                 }
             }
@@ -298,7 +299,7 @@ class PlayerViewModel @Inject constructor(
                         currentChannelInCategoryIndex = newChannelsInCategory.size - 1
                         val prevChannel = newChannelsInCategory[currentChannelInCategoryIndex]
                         currentChannelIndex = allChannels.indexOfFirst { it.id == prevChannel.id }
-                        println("IPTV: Pasando a categoría anterior '$newCategoryName' - Canal ${currentChannelInCategoryIndex + 1}/${newChannelsInCategory.size}")
+                        Timber.d("IPTV: Pasando a categoría anterior '$newCategoryName' - Canal ${currentChannelInCategoryIndex + 1}/${newChannelsInCategory.size}")
                         playChannel(prevChannel)
                     }
                 } else {
@@ -306,7 +307,7 @@ class PlayerViewModel @Inject constructor(
                     currentChannelInCategoryIndex--
                     val prevChannel = channelsInCategory[currentChannelInCategoryIndex]
                     currentChannelIndex = allChannels.indexOfFirst { it.id == prevChannel.id }
-                    println("IPTV: Canal anterior en categoría '$currentCategoryName' - ${currentChannelInCategoryIndex + 1}/${channelsInCategory.size}")
+                    Timber.d("IPTV: Canal anterior en categoría '$currentCategoryName' - ${currentChannelInCategoryIndex + 1}/${channelsInCategory.size}")
                     playChannel(prevChannel)
                 }
             }
@@ -330,8 +331,8 @@ class PlayerViewModel @Inject constructor(
             // Actualizar índices de categoría
             updateCategoryIndices(channel)
             
-            println("IPTV: Canal actual establecido - Índice: $currentChannelIndex, Total: ${allChannels.size}")
-            println("IPTV: Categoría: ${getCurrentCategoryName()}, Número: ${getCurrentChannelNumber()}")
+            Timber.d("IPTV: Canal actual establecido - Índice: $currentChannelIndex, Total: ${allChannels.size}")
+            Timber.d("IPTV: Categoría: ${getCurrentCategoryName()}, Número: ${getCurrentChannelNumber()}")
         }
     }
     
@@ -349,7 +350,7 @@ class PlayerViewModel @Inject constructor(
         val channelsInCategory = channelsByCategory[categoryName] ?: emptyList()
         currentChannelInCategoryIndex = channelsInCategory.indexOfFirst { it.id == channel.id }.takeIf { it >= 0 } ?: 0
         
-        println("IPTV: Índices actualizados - Categoría: $currentCategoryIndex ($categoryName), Canal: $currentChannelInCategoryIndex")
+        Timber.d("IPTV: Índices actualizados - Categoría: $currentCategoryIndex ($categoryName), Canal: $currentChannelInCategoryIndex")
     }
     
     fun nextCategory() {
@@ -440,7 +441,7 @@ class PlayerViewModel @Inject constructor(
         val position = if (channelIndex >= 0) channelIndex + 1 else 1
         val total = channelsInCategory.size
         
-        println("IPTV: Canal ${channel.name} en categoría '$categoryName': $position/$total")
+        Timber.d("IPTV: Canal ${channel.name} en categoría '$categoryName': $position/$total")
         return "$position/$total"
     }
     
@@ -459,8 +460,8 @@ class PlayerViewModel @Inject constructor(
         var frozenCyclesCount = 0
         var stablePlaybackCount = 0
         
-        println("IPTV: MÚSICA - ===== Iniciando monitor de congelamiento agresivo =====")
-        println("IPTV: MÚSICA - Cooldown entre fixes: ${MUSIC_FIX_COOLDOWN}ms (${MUSIC_FIX_COOLDOWN/1000}s)")
+        Timber.d("IPTV: MÚSICA - ===== Iniciando monitor de congelamiento agresivo =====")
+        Timber.d("IPTV: MÚSICA - Cooldown entre fixes: ${MUSIC_FIX_COOLDOWN}ms (${MUSIC_FIX_COOLDOWN/1000}s)")
         
         musicMonitorJob = viewModelScope.launch {
             kotlinx.coroutines.delay(3000) // Reducido a 3 segundos para detección más rápida
@@ -470,7 +471,7 @@ class PlayerViewModel @Inject constructor(
                 try {
                     // Si está en pausa manual, solo esperar sin monitorear
                     if (!_uiState.value.isPlaying) {
-                        println("IPTV: MÚSICA - Monitor: En pausa, esperando...")
+                        Timber.d("IPTV: MÚSICA - Monitor: En pausa, esperando...")
                         frozenCyclesCount = 0
                         stablePlaybackCount = 0
                         kotlinx.coroutines.delay(1000)
@@ -486,14 +487,14 @@ class PlayerViewModel @Inject constructor(
                                     vlcPlayerManager.mediaPlayer.time
                                 )
                             } catch (e: Exception) {
-                                println("IPTV: MÚSICA - Monitor: Error accediendo VLC: ${e.message}")
+                                Timber.d("IPTV: MÚSICA - Monitor: Error accediendo VLC: ${e.message}")
                                 Pair(false, -1L)
                             }
                         }
                     }
                     
                     if (vlcState == null || vlcState.second == -1L) {
-                        println("IPTV: MÚSICA - Monitor: Error obteniendo estado de VLC")
+                        Timber.d("IPTV: MÚSICA - Monitor: Error obteniendo estado de VLC")
                         kotlinx.coroutines.delay(2000)
                         continue
                     }
@@ -504,28 +505,28 @@ class PlayerViewModel @Inject constructor(
                     val timeSinceLastFix = currentTime - lastMusicFixTime
                     val isInCooldown = timeSinceLastFix < MUSIC_FIX_COOLDOWN
                     
-                    println("IPTV: MÚSICA - Monitor: VLC.isPlaying=$isVlcPlaying, Pos=${currentPosition}ms (Δ${positionDelta}ms), Frozen=$frozenCyclesCount, Cooldown=${if(isInCooldown) "${MUSIC_FIX_COOLDOWN - timeSinceLastFix}ms" else "NO"}")
+                    Timber.d("IPTV: MÚSICA - Monitor: VLC.isPlaying=$isVlcPlaying, Pos=${currentPosition}ms (Δ${positionDelta}ms), Frozen=$frozenCyclesCount, Cooldown=${if(isInCooldown) "${MUSIC_FIX_COOLDOWN - timeSinceLastFix}ms" else "NO"}")
                     
                     // DETECCIÓN 1: CAMBIO DE VIDEO (salto grande de posición)
                     // Reducido el umbral a 30 segundos para detección más rápida
                     if (lastPosition > 0 && (positionDelta < -3000 || positionDelta > 30000)) {
                         if (isInCooldown) {
-                            println("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - IGNORANDO para evitar sobrecarga")
+                            Timber.d("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - IGNORANDO para evitar sobrecarga")
                             lastPosition = currentPosition
                             frozenCyclesCount = 0
                             kotlinx.coroutines.delay(1000)
                             continue
                         }
                         
-                        println("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado (salto de ${positionDelta}ms) - Aplicando fix")
+                        Timber.d("IPTV: MÚSICA - Monitor: CAMBIO DE VIDEO detectado (salto de ${positionDelta}ms) - Aplicando fix")
                         lastMusicFixTime = currentTime
                         
                         kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                             vlcPlayerManager.pausePlayback()
-                            println("IPTV: MÚSICA - Monitor: PAUSADO (transición)")
+                            Timber.d("IPTV: MÚSICA - Monitor: PAUSADO (transición)")
                             kotlinx.coroutines.delay(1500) // Pausa más larga para limpiar decoder
                             vlcPlayerManager.resumePlayback()
-                            println("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder reiniciado")
+                            Timber.d("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder reiniciado")
                         }
                         
                         frozenCyclesCount = 0
@@ -540,25 +541,25 @@ class PlayerViewModel @Inject constructor(
                     if (isVlcPlaying && currentPosition == lastPosition && currentPosition > 0) {
                         frozenCyclesCount++
                         stablePlaybackCount = 0
-                        println("IPTV: MÚSICA - Monitor: VIDEO CONGELADO detectado (ciclo $frozenCyclesCount/2)")
+                        Timber.d("IPTV: MÚSICA - Monitor: VIDEO CONGELADO detectado (ciclo $frozenCyclesCount/2)")
                         
                         // Si lleva 2 ciclos consecutivos congelado (2 segundos), aplicar fix
                         if (frozenCyclesCount >= 2) {
                             if (isInCooldown) {
-                                println("IPTV: MÚSICA - Monitor: CONGELAMIENTO confirmado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - ESPERANDO")
+                                Timber.d("IPTV: MÚSICA - Monitor: CONGELAMIENTO confirmado pero EN COOLDOWN (${timeSinceLastFix}ms/${MUSIC_FIX_COOLDOWN}ms) - ESPERANDO")
                                 kotlinx.coroutines.delay(1000)
                                 continue
                             }
                             
-                            println("IPTV: MÚSICA - Monitor: DEADLOCK/CONGELAMIENTO CONFIRMADO - Aplicando fix urgente")
+                            Timber.d("IPTV: MÚSICA - Monitor: DEADLOCK/CONGELAMIENTO CONFIRMADO - Aplicando fix urgente")
                             lastMusicFixTime = currentTime
                             
                             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
                                 vlcPlayerManager.pausePlayback()
-                                println("IPTV: MÚSICA - Monitor: PAUSADO (deadlock)")
+                                Timber.d("IPTV: MÚSICA - Monitor: PAUSADO (deadlock)")
                                 kotlinx.coroutines.delay(1500) // Pausa larga para limpiar decoder
                                 vlcPlayerManager.resumePlayback()
-                                println("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder debería recuperarse")
+                                Timber.d("IPTV: MÚSICA - Monitor: RESUMIDO - Decoder debería recuperarse")
                             }
                             
                             frozenCyclesCount = 0
@@ -572,7 +573,7 @@ class PlayerViewModel @Inject constructor(
                         stablePlaybackCount++
                         
                         if (frozenCyclesCount > 0) {
-                            println("IPTV: MÚSICA - Monitor: Video recuperado (avanzó ${positionDelta}ms)")
+                            Timber.d("IPTV: MÚSICA - Monitor: Video recuperado (avanzó ${positionDelta}ms)")
                         }
                         
                         frozenCyclesCount = 0
@@ -588,14 +589,14 @@ class PlayerViewModel @Inject constructor(
                     kotlinx.coroutines.delay(1000)
                     
                 } catch (e: Exception) {
-                    println("IPTV: MÚSICA - Monitor: Error: ${e.message}")
+                    Timber.d("IPTV: MÚSICA - Monitor: Error: ${e.message}")
                     e.printStackTrace()
                     frozenCyclesCount = 0
                     kotlinx.coroutines.delay(2000)
                 }
             }
             
-            println("IPTV: MÚSICA - ===== Monitor finalizado =====")
+            Timber.d("IPTV: MÚSICA - ===== Monitor finalizado =====")
         }
     }
     
@@ -603,13 +604,13 @@ class PlayerViewModel @Inject constructor(
         musicMonitorJob?.cancel()
         musicMonitorJob = null
         lastMusicFixTime = 0 // Resetear cooldown al detener monitor
-        println("IPTV: MÚSICA - Monitor detenido")
+        Timber.d("IPTV: MÚSICA - Monitor detenido")
     }
     
     private fun startVideoMonitor() {
         stopVideoMonitor() // Detener monitor anterior si existe
         
-        println("IPTV: VIDEO - Iniciando monitor de sincronización A/V")
+        Timber.d("IPTV: VIDEO - Iniciando monitor de sincronización A/V")
         
         videoMonitorJob = viewModelScope.launch {
             kotlinx.coroutines.delay(5000) // Esperar 5 segundos para estabilización inicial
@@ -630,14 +631,14 @@ class PlayerViewModel @Inject constructor(
                                     isPlaying = vlcPlayerManager.mediaPlayer.isPlaying
                                 )
                             } catch (e: Exception) {
-                                println("IPTV: VIDEO - Error obteniendo métricas: ${e.message}")
+                                Timber.d("IPTV: VIDEO - Error obteniendo métricas: ${e.message}")
                                 null
                             }
                         }
                     }
                     
                     if (metrics == null) {
-                        println("IPTV: VIDEO - Timeout obteniendo métricas de VLC")
+                        Timber.d("IPTV: VIDEO - Timeout obteniendo métricas de VLC")
                         kotlinx.coroutines.delay(5000)
                         continue
                     }
@@ -648,17 +649,17 @@ class PlayerViewModel @Inject constructor(
                     
                     if (isDesynchronized) {
                         desyncCount++
-                        println("IPTV: VIDEO - Desincronización detectada: ${audioDelayMs}ms (${desyncCount}/2)")
+                        Timber.d("IPTV: VIDEO - Desincronización detectada: ${audioDelayMs}ms (${desyncCount}/2)")
                         
                         if (desyncCount >= 2) {
-                            println("IPTV: VIDEO - Aplicando corrección de sincronización A/V")
+                            Timber.d("IPTV: VIDEO - Aplicando corrección de sincronización A/V")
                             applyVideoResync()
                             desyncCount = 0
                             kotlinx.coroutines.delay(5000) // Esperar después del fix
                         }
                     } else {
                         if (desyncCount > 0) {
-                            println("IPTV: VIDEO - Sincronización A/V recuperada")
+                            Timber.d("IPTV: VIDEO - Sincronización A/V recuperada")
                         }
                         desyncCount = 0
                     }
@@ -666,10 +667,10 @@ class PlayerViewModel @Inject constructor(
                     // 2. Verificar congelamiento (posición no avanza)
                     if (metrics.currentPosition > 0 && metrics.currentPosition == lastCheckPosition && metrics.isPlaying) {
                         frozenCount++
-                        println("IPTV: VIDEO - Stream congelado detectado (${frozenCount}/3)")
+                        Timber.d("IPTV: VIDEO - Stream congelado detectado (${frozenCount}/3)")
                         
                         if (frozenCount >= 3) {
-                            println("IPTV: VIDEO - Stream congelado, reconectando...")
+                            Timber.d("IPTV: VIDEO - Stream congelado, reconectando...")
                             applyVideoReconnect()
                             frozenCount = 0
                             lastCheckPosition = 0
@@ -677,7 +678,7 @@ class PlayerViewModel @Inject constructor(
                         }
                     } else if (metrics.currentPosition > lastCheckPosition) {
                         if (frozenCount > 0) {
-                            println("IPTV: VIDEO - Stream recuperado")
+                            Timber.d("IPTV: VIDEO - Stream recuperado")
                         }
                         frozenCount = 0
                         lastCheckPosition = metrics.currentPosition
@@ -685,7 +686,7 @@ class PlayerViewModel @Inject constructor(
                     
                     // 3. Verificar pérdida de conexión (posición = 0 inesperadamente)
                     if (metrics.currentPosition == 0L && lastCheckPosition > 0) {
-                        println("IPTV: VIDEO - Pérdida de conexión detectada")
+                        Timber.d("IPTV: VIDEO - Pérdida de conexión detectada")
                         applyVideoReconnect()
                         lastCheckPosition = 0
                         kotlinx.coroutines.delay(5000)
@@ -695,32 +696,32 @@ class PlayerViewModel @Inject constructor(
                     kotlinx.coroutines.delay(5000) // Check cada 5 segundos
                     
                 } catch (e: Exception) {
-                    println("IPTV: VIDEO - Error en monitor: ${e.message}")
+                    Timber.d("IPTV: VIDEO - Error en monitor: ${e.message}")
                     kotlinx.coroutines.delay(5000)
                 }
             }
             
-            println("IPTV: VIDEO - Monitor finalizado")
+            Timber.d("IPTV: VIDEO - Monitor finalizado")
         }
     }
     
     private fun stopVideoMonitor() {
         videoMonitorJob?.cancel()
         videoMonitorJob = null
-        println("IPTV: VIDEO - Monitor detenido")
+        Timber.d("IPTV: VIDEO - Monitor detenido")
     }
     
     private suspend fun applyVideoResync() {
         try {
-            println("IPTV: VIDEO - Aplicando re-sincronización A/V...")
+            Timber.d("IPTV: VIDEO - Aplicando re-sincronización A/V...")
             
             // Método 1: Reset del delay de audio en VLC
             kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 try {
                     vlcPlayerManager.mediaPlayer.setAudioDelay(0) // Reset delay
-                    println("IPTV: VIDEO - Audio delay reseteado a 0")
+                    Timber.d("IPTV: VIDEO - Audio delay reseteado a 0")
                 } catch (e: Exception) {
-                    println("IPTV: VIDEO - No se pudo resetear audio delay: ${e.message}")
+                    Timber.d("IPTV: VIDEO - No se pudo resetear audio delay: ${e.message}")
                 }
             }
             
@@ -731,10 +732,10 @@ class PlayerViewModel @Inject constructor(
             kotlinx.coroutines.delay(600)
             vlcPlayerManager.resume()
             
-            println("IPTV: VIDEO - Re-sincronización completada")
+            Timber.d("IPTV: VIDEO - Re-sincronización completada")
             
         } catch (e: Exception) {
-            println("IPTV: VIDEO - Error aplicando resync: ${e.message}")
+            Timber.d("IPTV: VIDEO - Error aplicando resync: ${e.message}")
         }
     }
     
@@ -742,29 +743,29 @@ class PlayerViewModel @Inject constructor(
         try {
             val currentChannel = _uiState.value.currentChannel
             if (currentChannel == null) {
-                println("IPTV: VIDEO - No hay canal actual para reconectar")
+                Timber.d("IPTV: VIDEO - No hay canal actual para reconectar")
                 return
             }
             
-            println("IPTV: VIDEO - Reconectando stream...")
+            Timber.d("IPTV: VIDEO - Reconectando stream...")
             
             kotlinx.coroutines.withTimeoutOrNull(5000) {
                 vlcPlayerManager.stop()
                 kotlinx.coroutines.delay(500)
                 vlcPlayerManager.playStream(currentChannel.streamUrl)
             } ?: run {
-                println("IPTV: VIDEO - Timeout en reconexión")
+                Timber.d("IPTV: VIDEO - Timeout en reconexión")
             }
             
         } catch (e: Exception) {
-            println("IPTV: VIDEO - Error en reconexión: ${e.message}")
+            Timber.d("IPTV: VIDEO - Error en reconexión: ${e.message}")
         }
     }
     
     // Función pública para re-sincronización manual
     fun resyncAudioVideo() {
         viewModelScope.launch {
-            println("IPTV: VIDEO - Re-sincronización manual iniciada")
+            Timber.d("IPTV: VIDEO - Re-sincronización manual iniciada")
             applyVideoResync()
         }
     }
@@ -779,7 +780,7 @@ class PlayerViewModel @Inject constructor(
         try {
             val currentChannel = _uiState.value.currentChannel
             if (currentChannel == null) {
-                println("IPTV: MÚSICA - Error: No hay canal actual para aplicar fix")
+                Timber.d("IPTV: MÚSICA - Error: No hay canal actual para aplicar fix")
                 return
             }
             
@@ -787,7 +788,7 @@ class PlayerViewModel @Inject constructor(
             
             // Determinar tipo de problema y aplicar fix correspondiente
             if (currentPosition == 0L) {
-                println("IPTV: MÚSICA - Detectada pérdida de conexión, reconectando...")
+                Timber.d("IPTV: MÚSICA - Detectada pérdida de conexión, reconectando...")
                 
                 // Reconexión completa
                 kotlinx.coroutines.withTimeoutOrNull(5000) {
@@ -795,12 +796,12 @@ class PlayerViewModel @Inject constructor(
                     kotlinx.coroutines.delay(500)
                     vlcPlayerManager.playStream(currentChannel.streamUrl)
                 } ?: run {
-                    println("IPTV: MÚSICA - Timeout en reconexión, saltando al siguiente canal")
+                    Timber.d("IPTV: MÚSICA - Timeout en reconexión, saltando al siguiente canal")
                     nextChannel()
                     return
                 }
             } else {
-                println("IPTV: MÚSICA - Video congelado detectado, aplicando fix pausa/resume optimizado...")
+                Timber.d("IPTV: MÚSICA - Video congelado detectado, aplicando fix pausa/resume optimizado...")
                 
                 // Fix optimizado basado en observación del usuario:
                 // Pausa más larga permite que el buffer se limpie y el video se refresque
@@ -808,13 +809,13 @@ class PlayerViewModel @Inject constructor(
                 kotlinx.coroutines.delay(1200) // Pausa de 1.2 segundos (más efectiva)
                 vlcPlayerManager.resume()
                 
-                println("IPTV: MÚSICA - Fix pausa/resume completado, video debería recuperarse")
+                Timber.d("IPTV: MÚSICA - Fix pausa/resume completado, video debería recuperarse")
             }
             
-            println("IPTV: MÚSICA - Fix aplicado exitosamente")
+            Timber.d("IPTV: MÚSICA - Fix aplicado exitosamente")
             
         } catch (e: Exception) {
-            println("IPTV: MÚSICA - Error aplicando fix: ${e.message}")
+            Timber.d("IPTV: MÚSICA - Error aplicando fix: ${e.message}")
             // Intentar reconexión como último recurso
             try {
                 val currentChannel = _uiState.value.currentChannel
@@ -822,14 +823,14 @@ class PlayerViewModel @Inject constructor(
                     vlcPlayerManager.playStream(currentChannel.streamUrl)
                 }
             } catch (reconnectError: Exception) {
-                println("IPTV: MÚSICA - Error en reconexión de emergencia: ${reconnectError.message}")
+                Timber.d("IPTV: MÚSICA - Error en reconexión de emergencia: ${reconnectError.message}")
             }
         }
     }
 
     override fun onCleared() {
         super.onCleared()
-        println("IPTV: PlayerViewModel destruyéndose - limpiando recursos...")
+        Timber.d("IPTV: PlayerViewModel destruyéndose - limpiando recursos...")
         
         // Detener monitores
         stopMusicMonitor()
@@ -838,7 +839,7 @@ class PlayerViewModel @Inject constructor(
         // Liberar player
         vlcPlayerManager.release()
         
-        println("IPTV: PlayerViewModel limpiado exitosamente")
+        Timber.d("IPTV: PlayerViewModel limpiado exitosamente")
     }
 }
 
@@ -852,3 +853,4 @@ data class PlayerUiState(
     val categoryName: String = "",
     val channelNumber: String = "1/1"
 )
+

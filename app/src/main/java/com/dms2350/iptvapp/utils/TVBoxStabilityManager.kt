@@ -8,6 +8,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +25,7 @@ class TVBoxStabilityManager @Inject constructor(
         if (isMonitoring) return
         
         isMonitoring = true
-        println("IPTV: Iniciando monitoreo de estabilidad para TV Box")
+        Timber.d("IPTV: Iniciando monitoreo de estabilidad para TV Box")
         
         // Monitoreo de memoria cada 30 segundos
         memoryMonitorJob = CoroutineScope(Dispatchers.Main).launch {
@@ -33,7 +34,7 @@ class TVBoxStabilityManager @Inject constructor(
                     checkMemoryStatus()
                     delay(30000) // 30 segundos
                 } catch (e: Exception) {
-                    println("IPTV: Error en monitoreo de memoria: ${e.message}")
+                    Timber.d("IPTV: Error en monitoreo de memoria: ${e.message}")
                     delay(60000) // Esperar más tiempo si hay error
                 }
             }
@@ -54,7 +55,7 @@ class TVBoxStabilityManager @Inject constructor(
         isMonitoring = false
         memoryMonitorJob?.cancel()
         handler.removeCallbacksAndMessages(null)
-        println("IPTV: Monitoreo de estabilidad detenido")
+        Timber.d("IPTV: Monitoreo de estabilidad detenido")
     }
     
     private fun checkMemoryStatus() {
@@ -66,22 +67,22 @@ class TVBoxStabilityManager @Inject constructor(
             val usedMemory = totalMemory - freeMemory
             val memoryUsagePercent = (usedMemory * 100) / maxMemory
             
-            println("IPTV: Memoria usada: ${memoryUsagePercent}% (${usedMemory / 1024 / 1024}MB de ${maxMemory / 1024 / 1024}MB)")
+            Timber.d("IPTV: Memoria usada: ${memoryUsagePercent}% (${usedMemory / 1024 / 1024}MB de ${maxMemory / 1024 / 1024}MB)")
             
             // Si el uso de memoria es alto, ejecutar limpieza
             if (memoryUsagePercent > 75) {
-                println("IPTV: Uso de memoria alto (${memoryUsagePercent}%) - ejecutando limpieza")
+                Timber.d("IPTV: Uso de memoria alto (${memoryUsagePercent}%) - ejecutando limpieza")
                 performEmergencyCleanup()
             }
             
         } catch (e: Exception) {
-            println("IPTV: Error verificando memoria: ${e.message}")
+            Timber.d("IPTV: Error verificando memoria: ${e.message}")
         }
     }
     
     private fun performPeriodicCleanup() {
         try {
-            println("IPTV: Ejecutando limpieza periódica")
+            Timber.d("IPTV: Ejecutando limpieza periódica")
             
             // Garbage collection suave
             System.gc()
@@ -89,19 +90,19 @@ class TVBoxStabilityManager @Inject constructor(
             // Limpiar caché de imágenes si es posible
             try {
                 // Esto podría implementarse con Coil o la librería de imágenes que uses
-                println("IPTV: Limpieza de caché de imágenes")
+                Timber.d("IPTV: Limpieza de caché de imágenes")
             } catch (e: Exception) {
-                println("IPTV: Error limpiando caché de imágenes: ${e.message}")
+                Timber.d("IPTV: Error limpiando caché de imágenes: ${e.message}")
             }
             
         } catch (e: Exception) {
-            println("IPTV: Error en limpieza periódica: ${e.message}")
+            Timber.d("IPTV: Error en limpieza periódica: ${e.message}")
         }
     }
     
     private fun performEmergencyCleanup() {
         try {
-            println("IPTV: Ejecutando limpieza de emergencia")
+            Timber.d("IPTV: Ejecutando limpieza de emergencia")
             
             // Garbage collection agresivo
             System.gc()
@@ -115,16 +116,16 @@ class TVBoxStabilityManager @Inject constructor(
             val usedMemory = runtime.totalMemory() - runtime.freeMemory()
             val memoryUsagePercent = (usedMemory * 100) / runtime.maxMemory()
             
-            println("IPTV: Memoria después de limpieza: ${memoryUsagePercent}%")
+            Timber.d("IPTV: Memoria después de limpieza: ${memoryUsagePercent}%")
             
         } catch (e: Exception) {
-            println("IPTV: Error en limpieza de emergencia: ${e.message}")
+            Timber.d("IPTV: Error en limpieza de emergencia: ${e.message}")
         }
     }
     
     fun handleCriticalError(error: Throwable) {
         try {
-            println("IPTV: Manejando error crítico: ${error.message}")
+            Timber.d("IPTV: Manejando error crítico: ${error.message}")
             
             // Ejecutar limpieza inmediata
             performEmergencyCleanup()
@@ -135,34 +136,34 @@ class TVBoxStabilityManager @Inject constructor(
             }
             
         } catch (e: Exception) {
-            println("IPTV: Error manejando error crítico: ${e.message}")
+            Timber.d("IPTV: Error manejando error crítico: ${e.message}")
         }
     }
     
     private fun handleTVBoxCriticalError(error: Throwable) {
         try {
-            println("IPTV: Aplicando estrategias específicas para TV Box")
+            Timber.d("IPTV: Aplicando estrategias específicas para TV Box")
             
             // Estrategias específicas para TV Box
             when {
                 error.message?.contains("surface", ignoreCase = true) == true -> {
-                    println("IPTV: Error de surface detectado - aplicando workaround")
+                    Timber.d("IPTV: Error de surface detectado - aplicando workaround")
                     // Aquí podrías reiniciar el surface o aplicar otros workarounds
                 }
                 
                 error.message?.contains("codec", ignoreCase = true) == true -> {
-                    println("IPTV: Error de codec detectado - aplicando workaround")
+                    Timber.d("IPTV: Error de codec detectado - aplicando workaround")
                     // Aquí podrías cambiar configuraciones de codec
                 }
                 
                 error is OutOfMemoryError -> {
-                    println("IPTV: OutOfMemoryError - limpieza agresiva")
+                    Timber.d("IPTV: OutOfMemoryError - limpieza agresiva")
                     performEmergencyCleanup()
                 }
             }
             
         } catch (e: Exception) {
-            println("IPTV: Error en estrategias TV Box: ${e.message}")
+            Timber.d("IPTV: Error en estrategias TV Box: ${e.message}")
         }
     }
     
@@ -181,7 +182,7 @@ class TVBoxStabilityManager @Inject constructor(
                 usagePercent = (usedMemory * 100) / maxMemory
             )
         } catch (e: Exception) {
-            println("IPTV: Error obteniendo info de memoria: ${e.message}")
+            Timber.d("IPTV: Error obteniendo info de memoria: ${e.message}")
             MemoryInfo(0, 0, 0, 0)
         }
     }

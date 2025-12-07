@@ -2,8 +2,12 @@ package com.dms2350.iptvapp.data.api
 
 import com.dms2350.iptvapp.data.api.dto.ChannelDto
 import com.dms2350.iptvapp.data.api.dto.CategoryDto
+import com.dms2350.iptvapp.data.api.dto.DeviceInfoDto
+import com.dms2350.iptvapp.data.api.dto.HeartbeatResponse
 import retrofit2.Response
+import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -22,4 +26,7 @@ interface IPTVApi {
 
     @GET("categories/{id}")
     suspend fun getCategoryById(@Path("id") id: Int): Response<CategoryDto>
+
+    @POST("devices/heartbeat")
+    suspend fun sendHeartbeat(@Body deviceInfo: DeviceInfoDto): Response<HeartbeatResponse>
 }
