@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.dms2350.iptvapp.data.local.UserPreferences
 import com.dms2350.iptvapp.data.service.DeviceHeartbeatService
+import com.dms2350.iptvapp.data.service.NotificationPollingService
 import com.dms2350.iptvapp.presentation.ui.player.VLCPlayerManager
 import com.dms2350.iptvapp.presentation.theme.IPTVTheme
 import com.dms2350.iptvapp.presentation.ui.MainScreen
@@ -31,6 +32,9 @@ class MainActivity : ComponentActivity() {
 
     @Inject
     lateinit var heartbeatService: DeviceHeartbeatService
+
+    @Inject
+    lateinit var notificationPollingService: NotificationPollingService
 
     @Inject
     lateinit var userPreferences: UserPreferences
@@ -80,6 +84,9 @@ class MainActivity : ComponentActivity() {
         // Iniciar heartbeat DESPUÉS de que la UI esté configurada
         // Esto asegura que si hay registro pendiente, se complete primero
         initializeHeartbeat()
+
+        // Iniciar polling de notificaciones
+        initializeNotifications()
     }
 
     private fun initializeHeartbeat() {
@@ -98,6 +105,11 @@ class MainActivity : ComponentActivity() {
         }
     }
     
+    private fun initializeNotifications() {
+        Timber.i("NOTIFICATIONS: Iniciando servicio de polling de notificaciones")
+        notificationPollingService.startPolling()
+    }
+
     private fun setupFullScreenForTV() {
         // Pantalla completa inmersiva
         window.setFlags(
@@ -130,5 +142,8 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         // Detener heartbeat cuando se destruye la actividad
         heartbeatService.stopHeartbeat()
+        // Detener polling de notificaciones
+        notificationPollingService.stopPolling()
+        Timber.i("NOTIFICATIONS: Servicio de polling detenido")
     }
 }

@@ -4,6 +4,7 @@ import com.dms2350.iptvapp.data.api.dto.ChannelDto
 import com.dms2350.iptvapp.data.api.dto.CategoryDto
 import com.dms2350.iptvapp.data.api.dto.DeviceInfoDto
 import com.dms2350.iptvapp.data.api.dto.HeartbeatResponse
+import com.dms2350.iptvapp.data.api.dto.NotificationsResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -29,4 +30,7 @@ interface IPTVApi {
 
     @POST("devices/heartbeat")
     suspend fun sendHeartbeat(@Body deviceInfo: DeviceInfoDto): Response<HeartbeatResponse>
+
+    @GET("devices/check-status/{device_id}")
+    suspend fun getDeviceNotifications(@Path("device_id") deviceId: String): Response<NotificationsResponse>
 }
