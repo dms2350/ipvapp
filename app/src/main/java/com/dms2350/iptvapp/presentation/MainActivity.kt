@@ -14,23 +14,36 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import dagger.hilt.android.AndroidEntryPoint
+import com.dms2350.iptvapp.data.local.UserPreferences
+import com.dms2350.iptvapp.data.service.DeviceHeartbeatService
+import com.dms2350.iptvapp.data.service.NotificationPollingService
+import com.dms2350.iptvapp.presentation.ui.player.VLCPlayerManager
 import com.dms2350.iptvapp.presentation.theme.IPTVTheme
 import com.dms2350.iptvapp.presentation.ui.MainScreen
-import com.dms2350.iptvapp.utils.DeviceUtils
+import dagger.hilt.android.AndroidEntryPoint
+import timber.log.Timber
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject
+    lateinit var vlcPlayerManager: VLCPlayerManager
+
+    @Inject
+    lateinit var heartbeatService: DeviceHeartbeatService
+
+    @Inject
+    lateinit var notificationPollingService: NotificationPollingService
+
+    @Inject
+    lateinit var userPreferences: UserPreferences
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Configurar audio para dispositivos reales
-        volumeControlStream = AudioManager.STREAM_MUSIC
-        
-        // Configuración especial para dispositivos con restricciones
-        val isRestrictedDevice = android.os.Build.MANUFACTURER.equals("Xiaomi", ignoreCase = true) ||
-                                android.os.Build.MANUFACTURER.contains("HUAWEI", ignoreCase = true) ||
-                                android.os.Build.MANUFACTURER.contains("Rockchip", ignoreCase = true) ||
+
+        // Detectar dispositivos con restricciones
+        val isRestrictedDevice = android.os.Build.MANUFACTURER.contains("Rockchip", ignoreCase = true) ||
                                 android.os.Build.MANUFACTURER.contains("Allwinner", ignoreCase = true) ||
                                 android.os.Build.MANUFACTURER.contains("Amlogic", ignoreCase = true) ||
                                 android.os.Build.MANUFACTURER.contains("Premier", ignoreCase = true) ||
@@ -47,9 +60,9 @@ class MainActivity : ComponentActivity() {
                 val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 audioManager.isSpeakerphoneOn = true
-                println("IPTV: MainActivity configurado para streams HTTP")
+                Timber.d("IPTV: MainActivity configurado para streams HTTP")
             } catch (e: Exception) {
-                println("IPTV: Error configurando MainActivity para dispositivo con restricciones: ${e.message}")
+                Timber.d("IPTV: Error configurando MainActivity para dispositivo con restricciones: ${e.message}")
             }
         }
         
@@ -63,12 +76,40 @@ class MainActivity : ComponentActivity() {
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    MainScreen(userPreferences = userPreferences)
                 }
+            }
+        }
+
+        // Iniciar heartbeat DESPUÉS de que la UI esté configurada
+        // Esto asegura que si hay registro pendiente, se complete primero
+        initializeHeartbeat()
+
+        // Iniciar polling de notificaciones
+        initializeNotifications()
+    }
+
+    private fun initializeHeartbeat() {
+        // Esperar un momento para que el registro se complete si es necesario
+        window.decorView.post {
+            Timber.i("HEARTBEAT: Verificando estado de registro antes de iniciar")
+
+            // Verificar si el usuario ya completó el registro o lo omitió
+            if (userPreferences.hasCompletedRegistration()) {
+                Timber.i("HEARTBEAT: Usuario registrado, iniciando heartbeat con datos: ${userPreferences.userName ?: "N/A"}")
+                heartbeatService.startHeartbeat()
+            } else {
+                Timber.i("HEARTBEAT: Registro pendiente, heartbeat se iniciará después del registro")
+                // El heartbeat se iniciará desde RegistrationScreen cuando se complete
             }
         }
     }
     
+    private fun initializeNotifications() {
+        Timber.i("NOTIFICATIONS: Iniciando servicio de polling de notificaciones")
+        notificationPollingService.startPolling()
+    }
+
     private fun setupFullScreenForTV() {
         // Pantalla completa inmersiva
         window.setFlags(
@@ -95,5 +136,14 @@ class MainActivity : ComponentActivity() {
             or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
             or android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
         )
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Detener heartbeat cuando se destruye la actividad
+        heartbeatService.stopHeartbeat()
+        // Detener polling de notificaciones
+        notificationPollingService.stopPolling()
+        Timber.i("NOTIFICATIONS: Servicio de polling detenido")
     }
 }

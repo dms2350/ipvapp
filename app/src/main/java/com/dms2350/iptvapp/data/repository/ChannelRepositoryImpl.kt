@@ -9,6 +9,7 @@ import com.dms2350.iptvapp.domain.model.Channel
 import com.dms2350.iptvapp.domain.repository.ChannelRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,15 +37,15 @@ class ChannelRepositoryImpl @Inject constructor(
 
     override suspend fun refreshChannels() {
         try {
-            println("IPTV: Iniciando carga desde API...")
+            Timber.d("IPTV: Iniciando carga desde API...")
             
             // Verificar canales existentes antes de limpiar
             val existingCount = channelDao.getChannelCount()
-            println("IPTV: Canales existentes en BD antes de limpiar: $existingCount")
+            Timber.d("IPTV: Canales existentes en BD antes de limpiar: $existingCount")
             
             // Limpiar datos locales primero
             channelDao.deleteAllChannels()
-            println("IPTV: BD limpiada")
+            Timber.d("IPTV: BD limpiada")
             
             val startTime = System.currentTimeMillis()
             val response = kotlinx.coroutines.withTimeout(15000) { // 15 segundos timeout
@@ -52,28 +53,29 @@ class ChannelRepositoryImpl @Inject constructor(
             }
             val endTime = System.currentTimeMillis()
             
-            println("IPTV: API respondió en ${endTime - startTime}ms")
-            println("IPTV: Response code: ${response.code()}")
+            Timber.d("IPTV: API respondió en ${endTime - startTime}ms")
+            Timber.d("IPTV: Response code: ${response.code()}")
             
             if (response.isSuccessful) {
                 response.body()?.let { channelDtos ->
-                    println("IPTV: Canales recibidos: ${channelDtos.size}")
+                    Timber.d("IPTV: Canales recibidos: ${channelDtos.size}")
                     val channels = channelDtos.map { it.toDomain().toEntity() }
                     channelDao.insertChannels(channels)
                     
                     val finalCount = channelDao.getChannelCount()
-                    println("IPTV: Canales guardados en BD: $finalCount")
-                } ?: println("IPTV: Response body es null")
+                    Timber.d("IPTV: Canales guardados en BD: $finalCount")
+                } ?: Timber.d("IPTV: Response body es null")
             } else {
-                println("IPTV: Error en API: ${response.code()} - ${response.message()}")
+                Timber.d("IPTV: Error en API: ${response.code()} - ${response.message()}")
             }
         } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
-            println("IPTV: TIMEOUT - API no responde en 15 segundos")
+            Timber.d("IPTV: TIMEOUT - API no responde en 15 segundos")
         } catch (e: Exception) {
-            println("IPTV: Exception: ${e.message}")
+            Timber.d("IPTV: Exception: ${e.message}")
             e.printStackTrace()
         }
     }
 
 
 }
+
