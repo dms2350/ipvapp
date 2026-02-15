@@ -83,8 +83,8 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
     
     // LibVLC - Reproductor único
-    implementation("org.videolan.android:libvlc-all:4.0.0-eap23")
-    
+    implementation("org.videolan.android:libvlc-all:3.5.1")
+
     // Retrofit
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")

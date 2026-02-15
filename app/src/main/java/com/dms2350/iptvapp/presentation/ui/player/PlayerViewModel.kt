@@ -1,11 +1,17 @@
 package com.dms2350.iptvapp.presentation.ui.player
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dms2350.iptvapp.domain.model.Channel
 import com.dms2350.iptvapp.domain.repository.ChannelRepository
 import com.dms2350.iptvapp.domain.repository.CategoryRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -22,7 +28,8 @@ import javax.inject.Inject
 class PlayerViewModel @Inject constructor(
     private val vlcPlayerManager: VLCPlayerManager,
     private val channelRepository: ChannelRepository,
-    private val categoryRepository: CategoryRepository
+    private val categoryRepository: CategoryRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -49,6 +56,10 @@ class PlayerViewModel @Inject constructor(
     // Variables para el monitor de video (todos los canales)
     private var videoMonitorJob: Job? = null
     private var lastAudioDelay: Long = 0
+    
+    // Variables para monitoreo de red
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var wasDisconnected = false
     
     init {
         loadChannels()
@@ -92,6 +103,64 @@ class PlayerViewModel @Inject constructor(
             } else if (isApplyingFix) {
                 println("IPTV: MÚSICA - Fix ya en progreso, ignorando evento")
             }
+        }
+        
+        // Configurar listener de conectividad de red
+        setupNetworkListener()
+    }
+    
+    private fun setupNetworkListener() {
+        try {
+            val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            
+            networkCallback = object : ConnectivityManager.NetworkCallback() {
+                override fun onLost(network: Network) {
+                    println("IPTV: RED - Conexión perdida")
+                    wasDisconnected = true
+                }
+                
+                override fun onAvailable(network: Network) {
+                    println("IPTV: RED - Conexión disponible")
+                    
+                    if (wasDisconnected && _uiState.value.isPlaying) {
+                        println("IPTV: RED - Reconectando stream después de recuperar conexión...")
+                        wasDisconnected = false
+                        
+                        viewModelScope.launch(Dispatchers.Main) {
+                            delay(1000) // Esperar 1 segundo para que la red se estabilice
+                            
+                            val currentChannel = _uiState.value.currentChannel
+                            if (currentChannel != null) {
+                                println("IPTV: RED - Reiniciando stream: ${currentChannel.name}")
+                                
+                                try {
+                                    vlcPlayerManager.stop()
+                                    delay(500)
+                                    vlcPlayerManager.playStream(currentChannel.streamUrl)
+                                } catch (e: Exception) {
+                                    println("IPTV: RED - Error reconectando: ${e.message}")
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                    val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                    val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                    println("IPTV: RED - Capacidades: Internet=$hasInternet, Validated=$isValidated")
+                }
+            }
+            
+            val networkRequest = NetworkRequest.Builder()
+                .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                .build()
+            
+            connectivityManager.registerNetworkCallback(networkRequest, networkCallback!!)
+            println("IPTV: RED - Listener de conectividad registrado")
+            
+        } catch (e: Exception) {
+            println("IPTV: RED - Error configurando listener: ${e.message}")
         }
     }
     
@@ -154,7 +223,7 @@ class PlayerViewModel @Inject constructor(
                 vlcPlayerManager.stop()
                 
                 vlcPlayerManager.playStream(channel.streamUrl)
-                
+
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isPlaying = true,
@@ -609,7 +678,7 @@ class PlayerViewModel @Inject constructor(
     private fun startVideoMonitor() {
         stopVideoMonitor() // Detener monitor anterior si existe
         
-        println("IPTV: VIDEO - Iniciando monitor de sincronización A/V")
+        println("IPTV: VIDEO - Iniciando monitor de congelamiento y sincronización")
         
         videoMonitorJob = viewModelScope.launch {
             kotlinx.coroutines.delay(5000) // Esperar 5 segundos para estabilización inicial
@@ -638,9 +707,11 @@ class PlayerViewModel @Inject constructor(
                     
                     if (metrics == null) {
                         println("IPTV: VIDEO - Timeout obteniendo métricas de VLC")
-                        kotlinx.coroutines.delay(5000)
+                        kotlinx.coroutines.delay(3000) // Reducido de 5s a 3s
                         continue
                     }
+                    
+                    println("IPTV: VIDEO - Monitor: isPlaying=${metrics.isPlaying}, Pos=${metrics.currentPosition}ms, Frozen=$frozenCount")
                     
                     // 1. Verificar desincronización de audio/video
                     val audioDelayMs = metrics.audioDelay / 1000 // Convertir a ms
@@ -654,7 +725,7 @@ class PlayerViewModel @Inject constructor(
                             println("IPTV: VIDEO - Aplicando corrección de sincronización A/V")
                             applyVideoResync()
                             desyncCount = 0
-                            kotlinx.coroutines.delay(5000) // Esperar después del fix
+                            kotlinx.coroutines.delay(3000) // Reducido de 5s a 3s
                         }
                     } else {
                         if (desyncCount > 0) {
@@ -663,17 +734,18 @@ class PlayerViewModel @Inject constructor(
                         desyncCount = 0
                     }
                     
-                    // 2. Verificar congelamiento (posición no avanza)
+                    // 2. Verificar congelamiento (posición no avanza) - MÁS AGRESIVO
                     if (metrics.currentPosition > 0 && metrics.currentPosition == lastCheckPosition && metrics.isPlaying) {
                         frozenCount++
-                        println("IPTV: VIDEO - Stream congelado detectado (${frozenCount}/3)")
+                        println("IPTV: VIDEO - Stream congelado detectado (${frozenCount}/2) - VLC dice isPlaying=true pero posición no avanza")
                         
-                        if (frozenCount >= 3) {
-                            println("IPTV: VIDEO - Stream congelado, reconectando...")
-                            applyVideoReconnect()
+                        // Reducido de 3 a 2 verificaciones (de 15s a 6s)
+                        if (frozenCount >= 2) {
+                            println("IPTV: VIDEO - CONGELAMIENTO CONFIRMADO - Aplicando fix de pausa/play")
+                            applyVideoPausePlayFix()
                             frozenCount = 0
                             lastCheckPosition = 0
-                            kotlinx.coroutines.delay(5000)
+                            kotlinx.coroutines.delay(3000)
                         }
                     } else if (metrics.currentPosition > lastCheckPosition) {
                         if (frozenCount > 0) {
@@ -688,15 +760,15 @@ class PlayerViewModel @Inject constructor(
                         println("IPTV: VIDEO - Pérdida de conexión detectada")
                         applyVideoReconnect()
                         lastCheckPosition = 0
-                        kotlinx.coroutines.delay(5000)
+                        kotlinx.coroutines.delay(3000)
                     }
                     
                     lastAudioDelay = metrics.audioDelay
-                    kotlinx.coroutines.delay(5000) // Check cada 5 segundos
+                    kotlinx.coroutines.delay(3000) // Reducido de 5s a 3s para detección más rápida
                     
                 } catch (e: Exception) {
                     println("IPTV: VIDEO - Error en monitor: ${e.message}")
-                    kotlinx.coroutines.delay(5000)
+                    kotlinx.coroutines.delay(3000)
                 }
             }
             
@@ -735,6 +807,25 @@ class PlayerViewModel @Inject constructor(
             
         } catch (e: Exception) {
             println("IPTV: VIDEO - Error aplicando resync: ${e.message}")
+        }
+    }
+    
+    private suspend fun applyVideoPausePlayFix() {
+        try {
+            println("IPTV: VIDEO - Aplicando fix de pausa/play para video congelado...")
+            
+            // Fix simple pero efectivo: pausa y resume
+            vlcPlayerManager.pause()
+            kotlinx.coroutines.delay(1000) // Pausa de 1 segundo
+            vlcPlayerManager.resume()
+            
+            println("IPTV: VIDEO - Fix de pausa/play completado, video debería recuperarse")
+            
+        } catch (e: Exception) {
+            println("IPTV: VIDEO - Error aplicando fix de pausa/play: ${e.message}")
+            // Si falla el fix simple, intentar reconexión completa
+            println("IPTV: VIDEO - Intentando reconexión completa como fallback...")
+            applyVideoReconnect()
         }
     }
     
@@ -830,6 +921,17 @@ class PlayerViewModel @Inject constructor(
     override fun onCleared() {
         super.onCleared()
         println("IPTV: PlayerViewModel destruyéndose - limpiando recursos...")
+        
+        // Desregistrar listener de red
+        try {
+            networkCallback?.let {
+                val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                connectivityManager.unregisterNetworkCallback(it)
+                println("IPTV: RED - Listener de conectividad desregistrado")
+            }
+        } catch (e: Exception) {
+            println("IPTV: RED - Error desregistrando listener: ${e.message}")
+        }
         
         // Detener monitores
         stopMusicMonitor()
