@@ -20,8 +20,9 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         
+        // Solo arquitecturas ARM para TV/TV Box (ONN, Amlogic, etc.)
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
         }
         
         kapt {
@@ -33,11 +34,21 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // Habilitar ProGuard para reducir tamaño pero sin ofuscación agresiva
+            isMinifyEnabled = true
+            // Eliminar recursos no utilizados (pero mantener iconos del launcher)
+            isShrinkResources = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
+                getDefaultProguardFile("proguard-android.txt"), // Cambiado de optimize a normal
                 "proguard-rules.pro"
             )
+            // Mantener recursos específicos
+            resValue("string", "app_name", "PlayTV+")
+        }
+        debug {
+            // Mantener debug sin optimizaciones para desarrollo más rápido
+            isMinifyEnabled = false
+            resValue("string", "app_name", "PlayTV+ Debug")
         }
     }
     compileOptions {

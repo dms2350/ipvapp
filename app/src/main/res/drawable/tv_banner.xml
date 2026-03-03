@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Fondo azul oscuro del logo -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#002366" />
+        </shape>
+    </item>
+    
+    <!-- Ícono del launcher centrado -->
+    <item
+        android:drawable="@mipmap/ic_launcher"
+        android:gravity="center"
+        android:width="120dp"
+        android:height="120dp" />
+</layer-list>

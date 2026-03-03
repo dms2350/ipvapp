@@ -282,6 +282,51 @@ class PlayerViewModel @Inject constructor(
             }
         }
     }
+    
+    fun pausePlayback() {
+        if (_uiState.value.isPlaying) {
+            println("IPTV: Pausando reproducción (segundo plano)")
+            // Detener monitores antes de pausar para evitar falsos positivos
+            stopMusicMonitor()
+            stopVideoMonitor()
+            vlcPlayerManager.pause()
+            _uiState.value = _uiState.value.copy(isPlaying = false)
+        }
+    }
+    
+    fun resumePlayback() {
+        if (!_uiState.value.isPlaying) {
+            println("IPTV: Reanudando reproducción (volviendo a primer plano)")
+            vlcPlayerManager.resume()
+            _uiState.value = _uiState.value.copy(isPlaying = true)
+            
+            // Reiniciar monitores según el tipo de canal
+            val currentChannel = _uiState.value.currentChannel
+            if (currentChannel != null) {
+                if (isMusicChannel(currentChannel)) {
+                    println("IPTV: MÚSICA - Reiniciando monitor después de resume")
+                    startMusicMonitor()
+                } else {
+                    println("IPTV: VIDEO - Reiniciando monitor después de resume")
+                    startVideoMonitor()
+                }
+            }
+        }
+    }
+    
+    fun reattachVideoView(vlcLayout: org.videolan.libvlc.util.VLCVideoLayout) {
+        viewModelScope.launch(Dispatchers.Main) {
+            delay(100)
+            try {
+                println("IPTV: Re-adjuntando vista de video después de ON_RESUME")
+                vlcPlayerManager.mediaPlayer.detachViews()
+                vlcPlayerManager.mediaPlayer.attachViews(vlcLayout, null, true, false)
+                println("IPTV: Vista de video re-adjuntada exitosamente")
+            } catch (e: Exception) {
+                println("IPTV: Error re-adjuntando vista: ${e.message}")
+            }
+        }
+    }
 
     fun stop() {
         stopMusicMonitor()

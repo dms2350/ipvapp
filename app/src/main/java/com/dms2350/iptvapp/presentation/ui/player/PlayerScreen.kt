@@ -34,11 +34,44 @@ fun PlayerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var vlcVideoLayout by remember { mutableStateOf<VLCVideoLayout?>(null) }
+    var pauseTimestamp by remember { mutableStateOf(0L) }
     
     LaunchedEffect(channel) {
         viewModel.setCurrentChannel(channel)
         viewModel.playChannel(channel)
         focusRequester.requestFocus()
+    }
+    
+    // Detectar cuando la app pasa a segundo plano o vuelve a primer plano
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    // Siempre volver a la pantalla principal cuando se vuelve de segundo plano
+                    if (pauseTimestamp > 0) {
+                        val timeInBackground = System.currentTimeMillis() - pauseTimestamp
+                        println("IPTV: App volvió de segundo plano (${timeInBackground / 1000}s) - Volviendo a pantalla principal")
+                        viewModel.stop()
+                        onBackClick()
+                    }
+                }
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    pauseTimestamp = System.currentTimeMillis()
+                    println("IPTV: PlayerScreen ON_PAUSE - Pausando reproducción")
+                    viewModel.pausePlayback()
+                }
+                else -> {}
+            }
+        }
+        
+        lifecycleOwner.lifecycle.addObserver(observer)
+        
+        onDispose {
+            println("IPTV: PlayerScreen onDispose - Removiendo observer")
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Box(
@@ -102,19 +135,23 @@ fun PlayerScreen(
         } else {
             AndroidView(
                 factory = { context ->
+                    println("IPTV: Creando nueva VLCVideoLayout")
                     VLCVideoLayout(context).apply {
                         layoutParams = android.view.ViewGroup.LayoutParams(
                             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                             android.view.ViewGroup.LayoutParams.MATCH_PARENT
                         )
                         keepScreenOn = true
+                        vlcVideoLayout = this // Guardar referencia
                     }
                 },
-                update = { vlcLayout ->
+                update = { layout ->
                     try {
-                        viewModel.mediaPlayer.attachViews(vlcLayout, null, true, false)
+                        viewModel.mediaPlayer.detachViews()
+                        viewModel.mediaPlayer.attachViews(layout, null, true, false)
+                        println("IPTV: Vista de video adjuntada")
                     } catch (e: Exception) {
-                        println("VLC: Error: ${e.message}")
+                        println("VLC: Error adjuntando vista: ${e.message}")
                     }
                 },
                 modifier = Modifier
